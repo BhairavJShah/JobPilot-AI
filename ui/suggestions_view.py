@@ -1,0 +1,196 @@
+import os
+import csv
+import re
+import json
+import webbrowser
+import threading
+import tkinter as tk
+from tkinter import ttk, messagebox, scrolledtext
+from core.config_manager import CONFIG
+from core.db_manager import APPLIED_DB_PATH, log_message, recalculate_metrics, update_job_status_in_csv
+from core.resume_parser import extract_resume_text
+from core.email_smtp import send_smtp_email
+from automation.llm_evaluator import query_local_qwen
+from ui.components import make_btn_interactive
+
+class SuggestionsView(ttk.Frame):
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        self.controller = controller
+        
+        title_row = ttk.Frame(self)
+        title_row.pack(fill='x', pady=(0, 20))
+        lbl_title = ttk.Label(title_row, text="Career Page & Email Suggestions", style='Heading.TLabel')
+        lbl_title.pack(side='left')
+        
+        card_split = ttk.Frame(self)
+        card_split.pack(fill='both', expand=True)
+        card_split.columnconfigure(0, weight=1)
+        card_split.columnconfigure(1, weight=1)
+        card_split.rowconfigure(0, weight=1)
+        
+        left_card = ttk.Frame(card_split, style='Card.TFrame', padding=10)
+        left_card.grid(row=0, column=0, sticky='nsew', padx=(0, 10))
+        
+        columns = ('company', 'role', 'detail')
+        self.sug_tree = ttk.Treeview(left_card, columns=columns, show='headings')
+        self.sug_tree.heading('company', text='Company')
+        self.sug_tree.heading('role', text='Role')
+        self.sug_tree.heading('detail', text='Target Email/URL')
+        
+        self.sug_tree.column('company', width=100)
+        self.sug_tree.column('role', width=130)
+        self.sug_tree.column('detail', width=180)
+        self.sug_tree.bind("<<TreeviewSelect>>", self.on_suggestion_select)
+        self.sug_tree.pack(fill='both', expand=True)
+        
+        self.right_card = ttk.Frame(card_split, style='Card.TFrame', padding=15)
+        self.right_card.grid(row=0, column=1, sticky='nsew', padx=(10, 0))
+        
+        lbl_preview = ttk.Label(self.right_card, text="AI Generated Email Cover Letter Draft", style='CardHeading.TLabel')
+        lbl_preview.pack(anchor='w', pady=(0, 10))
+        
+        self.sug_preview = scrolledtext.ScrolledText(self.right_card, bg="#080c14", fg="#cbd5e1", insertbackground="white", font=('Segoe UI', 9), wrap='word', bd=0)
+        self.sug_preview.pack(fill='both', expand=True, pady=(0, 10))
+        
+        btn_row = ttk.Frame(self.right_card)
+        btn_row.pack(fill='x')
+        
+        self.btn_copy_draft = tk.Button(btn_row, text="Copy Draft", font=('Segoe UI', 9, 'bold'), padx=15, pady=6)
+        self.btn_copy_draft.pack(side='left', padx=3)
+        self.btn_copy_draft.config(command=self.copy_draft_to_clipboard)
+        make_btn_interactive(self.btn_copy_draft, "#2563eb", "#1d4ed8", "white", "white")
+        
+        self.btn_open_target = tk.Button(btn_row, text="Open URL", font=('Segoe UI', 9, 'bold'), padx=15, pady=6)
+        self.btn_open_target.pack(side='left', padx=3)
+        self.btn_open_target.config(command=self.open_suggestion_link)
+        make_btn_interactive(self.btn_open_target, "#10b981", "#059669", "white", "white")
+
+        self.btn_mark_applied = tk.Button(btn_row, text="✓ Mark Done", font=('Segoe UI', 9, 'bold'), padx=15, pady=6)
+        self.btn_mark_applied.pack(side='left', padx=3)
+        self.btn_mark_applied.config(command=self.mark_suggestion_as_applied)
+        make_btn_interactive(self.btn_mark_applied, "#3b82f6", "#2563eb", "white", "white")
+        
+        self.load_suggestions_table()
+
+    def load_suggestions_table(self):
+        for item in self.sug_tree.get_children():
+            self.sug_tree.delete(item)
+        if not os.path.exists(APPLIED_DB_PATH): return
+        try:
+            with open(APPLIED_DB_PATH, mode='r', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                header = next(reader, None)
+                for row in reader:
+                    if row and len(row) >= 6 and row[4] == "Suggested":
+                        self.sug_tree.insert('', 'end', iid=row[0], values=(row[2], row[1], row[5]))
+        except Exception as e:
+            log_message(f"Suggestions load error: {e}")
+
+    def on_suggestion_select(self, event):
+        selected = self.sug_tree.selection()
+        if not selected: return
+        item = self.sug_tree.item(selected[0], 'values')
+        company, role, detail = item[0], item[1], item[2]
+        
+        self.sug_preview.delete('1.0', 'end')
+        self.sug_preview.insert('end', "Generating customized email draft cover letter with local Qwen model...\n")
+        
+        def update_ui(reply):
+            self.sug_preview.delete('1.0', 'end')
+            self.sug_preview.insert('end', reply)
+
+        def generate_mail():
+            try:
+                resume_context = extract_resume_text()
+                prompt = f"""
+Write a professional, highly engaging cold outreach email (cover letter) applying for the role.
+Job Role: {role}
+Company Name: {company}
+Candidate Profile details:
+{json.dumps(CONFIG["candidate"], indent=2)}
+Candidate Resume Summary:
+{resume_context[:2000]}
+
+Draft a clear Subject line and Body. Use paragraph breaks. Keep it short, direct, and professional.
+Do not include any placeholders like [Date], write the letter ready to send.
+"""
+                reply = query_local_qwen(prompt)
+                self.after(0, lambda: update_ui(reply))
+            except Exception as e:
+                self.after(0, lambda: update_ui(f"Error generating email: {e}"))
+            
+        threading.Thread(target=generate_mail, daemon=True).start()
+
+    def send_direct_smtp_email_action(self):
+        selected = self.sug_tree.selection()
+        if not selected: return
+        url_iid = selected[0]
+        item = self.sug_tree.item(url_iid, 'values')
+        company, role, detail = item[0], item[1], item[2]
+        
+        email_matches = re.findall(r'[\w\.-]+@[\w\.-]+\.\w+', detail)
+        if not email_matches:
+            messagebox.showerror("Error", "No email recipient address found in suggestion target.")
+            return
+        to_email = email_matches[0]
+        
+        draft = self.sug_preview.get('1.0', 'end').strip()
+        subject = f"Application for {role} - {CONFIG['candidate']['name']}"
+        resume = CONFIG["candidate"]["resume_path"]
+        
+        def send_task():
+            log_message(f"SMTP: Sending cover letter to {to_email}...")
+            try:
+                send_smtp_email(to_email, subject, draft, resume)
+                log_message(f"SMTP: Successfully sent email application to {to_email}!")
+                self.after(10, lambda: self.finish_smtp_applied(url_iid))
+            except Exception as e:
+                log_message(f"SMTP ERROR: Failed to send email to {to_email}: {e}")
+                self.after(10, lambda: messagebox.showerror("SMTP Error", f"Email send failed: {e}"))
+                
+        threading.Thread(target=send_task, daemon=True).start()
+
+    def finish_smtp_applied(self, url_iid):
+        updated = update_job_status_in_csv(url_iid, "Suggested", "Applied", "Directly sent cover letter via SMTP Outreach Engine")
+        if updated:
+            messagebox.showinfo("Success", "Email outreach sent! Job moved to Applied History.")
+            self.load_suggestions_table()
+            self.sug_preview.delete('1.0', 'end')
+            self.controller.refresh_nav_buttons()
+
+    def mark_suggestion_as_applied(self):
+        selected = self.sug_tree.selection()
+        if not selected: return
+        url = selected[0]
+        
+        updated = update_job_status_in_csv(url, "Suggested", "Applied", "Manually applied and marked done via checklist")
+        if updated:
+            messagebox.showinfo("Applied", "Job marked as Applied and moved to History!")
+            self.load_suggestions_table()
+            self.sug_preview.delete('1.0', 'end')
+            self.controller.refresh_nav_buttons()
+        else:
+            messagebox.showerror("Error", "Could not find matching suggested record to update.")
+
+    def copy_draft_to_clipboard(self):
+        draft = self.sug_preview.get('1.0', 'end').strip()
+        self.clipboard_clear()
+        self.clipboard_append(draft)
+        messagebox.showinfo("Success", "Cover letter draft copied to clipboard!")
+
+    def open_suggestion_link(self):
+        selected = self.sug_tree.selection()
+        if not selected: return
+        item = self.sug_tree.item(selected[0], 'values')
+        detail = item[2]
+        
+        if "Email resume to:" in detail:
+            email_addr = detail.replace("Email resume to:", "").strip()
+            webbrowser.open(f"mailto:{email_addr}")
+        elif "Career Page:" in detail:
+            url_addr = detail.replace("Career Page:", "").strip()
+            webbrowser.open(url_addr)
+        else:
+            if detail.startswith("http"):
+                webbrowser.open(detail)

@@ -1,0 +1,33 @@
+{
+    "candidate": {
+        "name": "Your Full Name",
+        "email": "your.email@example.com",
+        "phone": "9999999999",
+        "country_code": "+91",
+        "linkedin": "https://www.linkedin.com/in/your-profile",
+        "github": "https://github.com/your-username",
+        "portfolio": "https://yourportfolio.com",
+        "resume_path": "C:\\path\\to\\your\\resume.pdf",
+        "skills": ["React", "Python", "Node.js", "SQL", "Git"]
+    },
+    "settings": {
+        "queries": ["Software Engineer", "Full Stack Developer"],
+        "min_score": 70,
+        "skip_keywords": ["c++", "ruby", "COBOL"],
+        "max_jobs_per_query": 10,
+        "experience_level": "All",
+        "job_type": "All",
+        "location_type": "All",
+        "location_scope": "Entire Country",
+        "preferred_locations": ["Mumbai, Maharashtra, India", "Bangalore, Karnataka, India"],
+        "target_platforms": ["Indeed", "Naukri", "LinkedIn"]
+    },
+    "accounts": {
+        "indeed_email": "",
+        "indeed_pass": "",
+        "naukri_email": "",
+        "naukri_pass": "",
+        "linkedin_email": "",
+        "linkedin_pass": ""
+    }
+}

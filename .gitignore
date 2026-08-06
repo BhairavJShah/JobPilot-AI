@@ -1,0 +1,25 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local user configurations & databases (CRITICAL: Do not upload credentials!)
+config.json
+applied_jobs.csv
+bot_logs.txt
+edge-debug-profile/
+
+# Media & Screenshots
+screenshots/
+*.png
+*.jpg
+*.jpeg
+
+# Environments
+.venv/
+env/
+ENV/
+bin/
+lib/
+include/
+/lib64/
