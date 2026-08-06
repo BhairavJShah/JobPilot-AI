@@ -2,7 +2,7 @@ import os
 import json
 import urllib.parse
 
-BASE_DIR = r"C:\Users\ttac3\OneDrive\Documents\job AI"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 SCREENSHOTS_DIR = os.path.join(BASE_DIR, "screenshots")
 os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
@@ -28,20 +28,20 @@ LOCATION_DATA = {
 
 DEFAULT_CONFIG = {
     "candidate": {
-        "name": "Bhairav J Shah",
-        "email": "j.bhairavshah@gmail.com",
-        "phone": "8667603233",
+        "name": "Your Full Name",
+        "email": "your.email@example.com",
+        "phone": "9999999999",
         "country_code": "+91",
-        "linkedin": "https://www.linkedin.com/in/bhairav-j-shah",
-        "github": "https://github.com/BhairavJShah",
-        "portfolio": "https://bhairav-j-shah.vercel.app/",
-        "resume_path": r"C:\Users\ttac3\Downloads\bhairav_j_shah_resume.pdf",
-        "skills": ["React", "Node.js", "Python", "Tailwind CSS", "JavaScript", "Git", "Flutter", "React Native", "Linux"]
+        "linkedin": "https://www.linkedin.com/in/your-profile",
+        "github": "https://github.com/your-username",
+        "portfolio": "https://yourportfolio.com",
+        "resume_path": "",
+        "skills": ["React", "Node.js", "Python", "JavaScript", "Git"]
     },
     "settings": {
         "queries": ["Full Stack Developer", "Software Engineer", "Frontend Developer"],
         "min_score": 70,
-        "skip_keywords": ["c++", "cpp", "ruby", "rails", "spring boot", "hibernate", "j2ee", "weblogic", "ejb"],
+        "skip_keywords": ["c++", "ruby", "COBOL"],
         "max_jobs_per_query": 10,
         "experience_level": "All",
         "job_type": "All",
@@ -54,8 +54,8 @@ DEFAULT_CONFIG = {
     "accounts": {
         "indeed_email": "",
         "indeed_pass": "",
-        "naukri_email": "j.bhairavshah@gmail.com",
-        "naukri_pass": "@Donbhai12345",
+        "naukri_email": "",
+        "naukri_pass": "",
         "linkedin_email": "",
         "linkedin_pass": ""
     },

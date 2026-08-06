@@ -3,7 +3,7 @@ import csv
 from datetime import datetime
 import core.state as state
 
-BASE_DIR = r"C:\Users\ttac3\OneDrive\Documents\job AI"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APPLIED_DB_PATH = os.path.join(BASE_DIR, "applied_jobs.csv")
 LOG_FILE_PATH = os.path.join(BASE_DIR, "bot_logs.txt")
 

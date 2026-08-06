@@ -322,7 +322,7 @@ async def run_bot_async():
     
     async with async_playwright() as p:
         try:
-            user_data_dir = r"C:\Users\ttac3\edge-debug-profile"
+            user_data_dir = os.path.join(os.path.expanduser("~"), "edge-debug-profile")
             log_message("Launching Edge Browser...")
             browser = await p.chromium.launch_persistent_context(
                 user_data_dir,
@@ -804,7 +804,7 @@ def apply_single_job_async(job):
             async with async_playwright() as p:
                 browser = None
                 try:
-                    user_data_dir = r"C:\Users\ttac3\edge-debug-profile"
+                    user_data_dir = os.path.join(os.path.expanduser("~"), "edge-debug-profile")
                     browser = await p.chromium.launch_persistent_context(
                         user_data_dir,
                         executable_path=r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",

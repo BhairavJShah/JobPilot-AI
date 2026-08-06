@@ -1,3 +1,4 @@
+import os
 import asyncio
 import threading
 from playwright.async_api import async_playwright
@@ -25,7 +26,7 @@ async def run_application_status_tracker():
         async with async_playwright() as p:
             browser = None
             try:
-                user_data_dir = r"C:\Users\ttac3\edge-debug-profile"
+                user_data_dir = os.path.join(os.path.expanduser("~"), "edge-debug-profile")
                 browser = await p.chromium.launch_persistent_context(
                     user_data_dir,
                     executable_path=r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
