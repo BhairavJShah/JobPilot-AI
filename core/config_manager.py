@@ -51,8 +51,13 @@ DEFAULT_CONFIG = {
         "target_platforms": ["Indeed", "Naukri", "LinkedIn"],
         "ollama_model": "qwen2.5:7b",
         "ai_provider": "local",
-        "gemini_api_key": "",
-        "gemini_model": "gemini-2.5-flash"
+        "cloud_ai_preset": "OpenAI",
+        "cloud_ai_base_url": "https://api.openai.com/v1",
+        "cloud_ai_model": "gpt-4o-mini",
+        "cloud_ai_auth_type": "api_key",
+        "cloud_ai_api_key": "",
+        "cloud_ai_username": "",
+        "cloud_ai_password": ""
     },
     "accounts": {
         "indeed_email": "",
@@ -146,17 +151,24 @@ def get_installed_ollama_models():
 def get_ai_provider():
     return CONFIG.get("settings", {}).get("ai_provider", "local")
 
-def get_gemini_api_key():
-    return CONFIG.get("settings", {}).get("gemini_api_key", "").strip()
-
-def get_gemini_model():
-    return CONFIG.get("settings", {}).get("gemini_model", "gemini-2.5-flash")
+def get_cloud_ai_config():
+    s = CONFIG.get("settings", {})
+    return {
+        "preset": s.get("cloud_ai_preset", "OpenAI"),
+        "base_url": s.get("cloud_ai_base_url", "https://api.openai.com/v1").strip(),
+        "model": s.get("cloud_ai_model", "gpt-4o-mini").strip(),
+        "auth_type": s.get("cloud_ai_auth_type", "api_key"),
+        "api_key": s.get("cloud_ai_api_key", "").strip(),
+        "username": s.get("cloud_ai_username", "").strip(),
+        "password": s.get("cloud_ai_password", "").strip()
+    }
 
 def get_active_model_display():
     provider = get_ai_provider()
-    if provider == "gemini":
-        g_model = get_gemini_model()
-        return f"☁️ Gemini ({g_model})"
+    if provider == "cloud":
+        cfg = get_cloud_ai_config()
+        m_name = cfg["model"] or cfg["preset"]
+        return f"☁️ Cloud AI ({m_name})"
     else:
         l_model = get_model_name()
         return f"🤖 Local ({l_model})"

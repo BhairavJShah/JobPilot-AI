@@ -37,13 +37,15 @@ class SettingsView(ttk.Frame):
         f_prov = ttk.Frame(f_ai)
         f_prov.pack(fill='x', pady=4)
         
-        self.ai_provider_var = tk.StringVar(value=CONFIG["settings"].get("ai_provider", "local"))
+        provider_val = CONFIG["settings"].get("ai_provider", "local")
+        if provider_val == "gemini": provider_val = "cloud"
+        self.ai_provider_var = tk.StringVar(value=provider_val)
         
         rb_local = tk.Radiobutton(f_prov, text="🤖 Local Ollama (100% Private / Offline)", variable=self.ai_provider_var, value="local", command=self.on_provider_changed, bg='#1e293b', fg='white', selectcolor='#0f172a', font=('Segoe UI', 9, 'bold'))
         rb_local.pack(side='left', padx=(0, 20))
         
-        rb_gemini = tk.Radiobutton(f_prov, text="☁️ Google Gemini (Cloud AI / Ultra-Fast 0.5s)", variable=self.ai_provider_var, value="gemini", command=self.on_provider_changed, bg='#1e293b', fg='white', selectcolor='#0f172a', font=('Segoe UI', 9, 'bold'))
-        rb_gemini.pack(side='left')
+        rb_cloud = tk.Radiobutton(f_prov, text="☁️ Cloud AI / External API (OpenAI, DeepSeek, Groq, Google, Custom REST)", variable=self.ai_provider_var, value="cloud", command=self.on_provider_changed, bg='#1e293b', fg='white', selectcolor='#0f172a', font=('Segoe UI', 9, 'bold'))
+        rb_cloud.pack(side='left')
 
         # Frame for Local Ollama Settings
         self.f_ollama_sub = ttk.Frame(f_ai)
@@ -60,35 +62,88 @@ class SettingsView(ttk.Frame):
         btn_refresh_models.config(command=self.refresh_models)
         make_btn_interactive(btn_refresh_models, "#3b82f6", "#2563eb", "white", "white")
 
-        # Frame for Google Gemini Cloud Settings
-        self.f_gemini_sub = ttk.Frame(f_ai)
-        self.f_gemini_sub.pack(fill='x', pady=5)
+        # Frame for Universal Cloud AI Settings
+        self.f_cloud_sub = ttk.Frame(f_ai)
+        self.f_cloud_sub.pack(fill='x', pady=5)
         
-        gem_grid = ttk.Frame(self.f_gemini_sub)
-        gem_grid.pack(fill='x')
-        gem_grid.columnconfigure(0, weight=2)
-        gem_grid.columnconfigure(1, weight=1)
+        # Preset Selector
+        f_preset = ttk.Frame(self.f_cloud_sub)
+        f_preset.pack(fill='x', pady=(0, 6))
+        ttk.Label(f_preset, text="Cloud Provider Preset Quick-Select", font=('Segoe UI', 9, 'bold'), foreground='#94a3b8').pack(anchor='w', pady=(0, 4))
         
-        f_key = ttk.Frame(gem_grid)
-        f_key.grid(row=0, column=0, sticky='ew', padx=(0, 10))
-        ttk.Label(f_key, text="Google Gemini API Key (from Google AI Studio)", font=('Segoe UI', 9, 'bold'), foreground='#94a3b8').pack(anchor='w', pady=(0, 4))
-        self.entry_gemini_key = tk.Entry(f_key, bg="#080c14", fg="white", insertbackground="white", bd=0, highlightthickness=1, highlightbackground="#1f2937", font=('Segoe UI', 10), show="*")
-        self.entry_gemini_key.pack(fill='x', ipady=6)
-        self.entry_gemini_key.insert(0, CONFIG["settings"].get("gemini_api_key", ""))
+        self.sel_preset = ttk.Combobox(f_preset, values=["OpenAI / ChatGPT", "DeepSeek", "Groq", "Google AI", "Custom Endpoint"], state="readonly")
+        self.sel_preset.pack(fill='x')
+        self.sel_preset.set(CONFIG["settings"].get("cloud_ai_preset", "OpenAI / ChatGPT"))
+        self.sel_preset.bind("<<ComboboxSelected>>", self.on_cloud_preset_selected)
         
-        f_gmod = ttk.Frame(gem_grid)
-        f_gmod.grid(row=0, column=1, sticky='ew')
-        ttk.Label(f_gmod, text="Gemini Model", font=('Segoe UI', 9, 'bold'), foreground='#94a3b8').pack(anchor='w', pady=(0, 4))
-        self.sel_gemini_model = ttk.Combobox(f_gmod, values=["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"], state="readonly")
-        self.sel_gemini_model.pack(fill='x')
-        self.sel_gemini_model.set(CONFIG["settings"].get("gemini_model", "gemini-2.5-flash"))
+        # Endpoint & Model Row
+        cloud_grid = ttk.Frame(self.f_cloud_sub)
+        cloud_grid.pack(fill='x', pady=4)
+        cloud_grid.columnconfigure((0, 1), weight=1, uniform="equal")
         
-        btn_test_gemini = tk.Button(self.f_gemini_sub, text="⚡ Test Gemini Key", font=('Segoe UI', 9, 'bold'), padx=12, pady=4)
-        btn_test_gemini.pack(anchor='w', pady=(8, 0))
-        btn_test_gemini.config(command=self.test_gemini_key)
-        make_btn_interactive(btn_test_gemini, "#10b981", "#059669", "white", "white")
+        f_url = ttk.Frame(cloud_grid)
+        f_url.grid(row=0, column=0, sticky='ew', padx=(0, 6))
+        ttk.Label(f_url, text="Base API Endpoint URL", font=('Segoe UI', 9, 'bold'), foreground='#94a3b8').pack(anchor='w', pady=(0, 4))
+        self.entry_cloud_url = tk.Entry(f_url, bg="#080c14", fg="white", insertbackground="white", bd=0, highlightthickness=1, highlightbackground="#1f2937", font=('Segoe UI', 9))
+        self.entry_cloud_url.pack(fill='x', ipady=5)
+        self.entry_cloud_url.insert(0, CONFIG["settings"].get("cloud_ai_base_url", "https://api.openai.com/v1"))
+        
+        f_cmod = ttk.Frame(cloud_grid)
+        f_cmod.grid(row=0, column=1, sticky='ew', padx=(6, 0))
+        ttk.Label(f_cmod, text="Model Name / ID", font=('Segoe UI', 9, 'bold'), foreground='#94a3b8').pack(anchor='w', pady=(0, 4))
+        self.entry_cloud_model = tk.Entry(f_cmod, bg="#080c14", fg="white", insertbackground="white", bd=0, highlightthickness=1, highlightbackground="#1f2937", font=('Segoe UI', 9))
+        self.entry_cloud_model.pack(fill='x', ipady=5)
+        self.entry_cloud_model.insert(0, CONFIG["settings"].get("cloud_ai_model", "gpt-4o-mini"))
+        
+        # Authentication Selector (API Key vs Username/Password)
+        f_auth_type = ttk.Frame(self.f_cloud_sub)
+        f_auth_type.pack(fill='x', pady=(10, 4))
+        ttk.Label(f_auth_type, text="Authentication Method", font=('Segoe UI', 9, 'bold'), foreground='#94a3b8').pack(anchor='w', pady=(0, 4))
+        
+        self.auth_type_var = tk.StringVar(value=CONFIG["settings"].get("cloud_ai_auth_type", "api_key"))
+        
+        rb_auth_key = tk.Radiobutton(f_auth_type, text="🔑 API Key / Bearer Token", variable=self.auth_type_var, value="api_key", command=self.on_auth_type_changed, bg='#1e293b', fg='white', selectcolor='#0f172a', font=('Segoe UI', 9))
+        rb_auth_key.pack(side='left', padx=(0, 20))
+        
+        rb_auth_pass = tk.Radiobutton(f_auth_type, text="👤 Username & Password (Basic Auth)", variable=self.auth_type_var, value="user_pass", command=self.on_auth_type_changed, bg='#1e293b', fg='white', selectcolor='#0f172a', font=('Segoe UI', 9))
+        rb_auth_pass.pack(side='left')
+
+        # API Key Frame
+        self.f_key_sub = ttk.Frame(self.f_cloud_sub)
+        self.f_key_sub.pack(fill='x', pady=4)
+        ttk.Label(self.f_key_sub, text="API Key / Token", font=('Segoe UI', 9, 'bold'), foreground='#94a3b8').pack(anchor='w', pady=(0, 4))
+        self.entry_cloud_key = tk.Entry(self.f_key_sub, bg="#080c14", fg="white", insertbackground="white", bd=0, highlightthickness=1, highlightbackground="#1f2937", font=('Segoe UI', 10), show="*")
+        self.entry_cloud_key.pack(fill='x', ipady=5)
+        self.entry_cloud_key.insert(0, CONFIG["settings"].get("cloud_ai_api_key", CONFIG["settings"].get("gemini_api_key", "")))
+
+        # Username & Password Frame
+        self.f_userpass_sub = ttk.Frame(self.f_cloud_sub)
+        self.f_userpass_sub.pack(fill='x', pady=4)
+        up_grid = ttk.Frame(self.f_userpass_sub)
+        up_grid.pack(fill='x')
+        up_grid.columnconfigure((0, 1), weight=1, uniform="equal")
+        
+        f_u = ttk.Frame(up_grid)
+        f_u.grid(row=0, column=0, sticky='ew', padx=(0, 6))
+        ttk.Label(f_u, text="API Username", font=('Segoe UI', 9, 'bold'), foreground='#94a3b8').pack(anchor='w', pady=(0, 4))
+        self.entry_cloud_user = tk.Entry(f_u, bg="#080c14", fg="white", insertbackground="white", bd=0, highlightthickness=1, highlightbackground="#1f2937", font=('Segoe UI', 9))
+        self.entry_cloud_user.pack(fill='x', ipady=5)
+        self.entry_cloud_user.insert(0, CONFIG["settings"].get("cloud_ai_username", ""))
+        
+        f_p = ttk.Frame(up_grid)
+        f_p.grid(row=0, column=1, sticky='ew', padx=(6, 0))
+        ttk.Label(f_p, text="API Password", font=('Segoe UI', 9, 'bold'), foreground='#94a3b8').pack(anchor='w', pady=(0, 4))
+        self.entry_cloud_pass = tk.Entry(f_p, bg="#080c14", fg="white", insertbackground="white", bd=0, highlightthickness=1, highlightbackground="#1f2937", font=('Segoe UI', 9), show="*")
+        self.entry_cloud_pass.pack(fill='x', ipady=5)
+        self.entry_cloud_pass.insert(0, CONFIG["settings"].get("cloud_ai_password", ""))
+        
+        btn_test_cloud = tk.Button(self.f_cloud_sub, text="⚡ Test Cloud AI Connection", font=('Segoe UI', 9, 'bold'), padx=12, pady=4)
+        btn_test_cloud.pack(anchor='w', pady=(10, 0))
+        btn_test_cloud.config(command=self.test_cloud_connection)
+        make_btn_interactive(btn_test_cloud, "#10b981", "#059669", "white", "white")
 
         self.on_provider_changed()
+        self.on_auth_type_changed()
         self.refresh_models()
 
         # Tag/Chip Containers for Queries & Skip Keywords
@@ -213,29 +268,74 @@ class SettingsView(ttk.Frame):
 
     def on_provider_changed(self):
         prov = self.ai_provider_var.get()
-        if prov == "gemini":
+        if prov == "cloud":
             self.f_ollama_sub.pack_forget()
-            self.f_gemini_sub.pack(fill='x', pady=5)
+            self.f_cloud_sub.pack(fill='x', pady=5)
         else:
-            self.f_gemini_sub.pack_forget()
+            self.f_cloud_sub.pack_forget()
             self.f_ollama_sub.pack(fill='x', pady=5)
 
-    def test_gemini_key(self):
-        key = self.entry_gemini_key.get().strip()
-        if not key:
-            messagebox.showerror("Error", "Please enter a Google Gemini API Key.")
+    def on_auth_type_changed(self):
+        atype = self.auth_type_var.get()
+        if atype == "user_pass":
+            self.f_key_sub.pack_forget()
+            self.f_userpass_sub.pack(fill='x', pady=4)
+        else:
+            self.f_userpass_sub.pack_forget()
+            self.f_key_sub.pack(fill='x', pady=4)
+
+    def on_cloud_preset_selected(self, event):
+        preset = self.sel_preset.get()
+        if "OpenAI" in preset:
+            self.entry_cloud_url.delete(0, 'end'); self.entry_cloud_url.insert(0, "https://api.openai.com/v1")
+            self.entry_cloud_model.delete(0, 'end'); self.entry_cloud_model.insert(0, "gpt-4o-mini")
+        elif "DeepSeek" in preset:
+            self.entry_cloud_url.delete(0, 'end'); self.entry_cloud_url.insert(0, "https://api.deepseek.com/v1")
+            self.entry_cloud_model.delete(0, 'end'); self.entry_cloud_model.insert(0, "deepseek-chat")
+        elif "Groq" in preset:
+            self.entry_cloud_url.delete(0, 'end'); self.entry_cloud_url.insert(0, "https://api.groq.com/openai/v1")
+            self.entry_cloud_model.delete(0, 'end'); self.entry_cloud_model.insert(0, "llama-3.3-70b-versatile")
+        elif "Google" in preset:
+            self.entry_cloud_url.delete(0, 'end'); self.entry_cloud_url.insert(0, "https://generativelanguage.googleapis.com/v1beta")
+            self.entry_cloud_model.delete(0, 'end'); self.entry_cloud_model.insert(0, "gemini-2.5-flash")
+
+    def test_cloud_connection(self):
+        url = self.entry_cloud_url.get().strip()
+        model = self.entry_cloud_model.get().strip()
+        atype = self.auth_type_var.get()
+        key = self.entry_cloud_key.get().strip()
+        uname = self.entry_cloud_user.get().strip()
+        passwd = self.entry_cloud_pass.get().strip()
+        
+        if atype == "user_pass" and (not uname or not passwd):
+            messagebox.showerror("Error", "Please enter both API Username and Password.")
             return
-        g_model = self.sel_gemini_model.get()
+        elif atype == "api_key" and not key:
+            messagebox.showerror("Error", "Please enter an API Key / Token.")
+            return
+            
         import urllib.request
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={key}"
-        payload = {"contents": [{"parts": [{"text": "Hello, respond with 'Connected'"}]}]}
+        import base64
+        headers = {'Content-Type': 'application/json'}
+        if atype == "user_pass" or (uname and passwd and not key):
+            up = f"{uname}:{passwd}".encode('utf-8')
+            headers['Authorization'] = f"Basic {base64.b64encode(up).decode('utf-8')}"
+        elif key:
+            if "generativelanguage.googleapis.com" in url:
+                headers['x-goog-api-key'] = key
+            else:
+                headers['Authorization'] = f"Bearer {key}"
+                
+        endpoint = f"{url.rstrip('/')}/models/{model}:generateContent" if "generativelanguage.googleapis.com" in url else (f"{url.rstrip('/')}/chat/completions" if not url.endswith("/chat/completions") else url)
+        payload = {"contents": [{"parts": [{"text": "Hello"}]}]} if "generativelanguage.googleapis.com" in url else {"model": model, "messages": [{"role": "user", "content": "Hello"}]}
+        
         try:
-            req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers={'Content-Type': 'application/json'})
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            req = urllib.request.Request(endpoint, data=json.dumps(payload).encode('utf-8'), headers=headers)
+            with urllib.request.urlopen(req, timeout=12) as resp:
                 res = json.loads(resp.read().decode('utf-8'))
-                messagebox.showinfo("Success", f"Google Gemini ({g_model}) connected successfully!")
+                messagebox.showinfo("Success", f"Universal Cloud AI ({model}) connected successfully!")
         except Exception as e:
-            messagebox.showerror("Connection Error", f"Gemini API test failed: {e}")
+            messagebox.showerror("Connection Error", f"Cloud AI API connection test failed: {e}")
 
     def refresh_models(self):
         models = get_installed_ollama_models()
@@ -308,13 +408,19 @@ class SettingsView(ttk.Frame):
             CONFIG["settings"]["location_scope"] = self.sel_scope.get()
             CONFIG["settings"]["target_platforms"] = plat_list
             CONFIG["settings"]["ollama_model"] = self.sel_model.get()
+            
             CONFIG["settings"]["ai_provider"] = self.ai_provider_var.get()
-            CONFIG["settings"]["gemini_api_key"] = self.entry_gemini_key.get().strip()
-            CONFIG["settings"]["gemini_model"] = self.sel_gemini_model.get()
+            CONFIG["settings"]["cloud_ai_preset"] = self.sel_preset.get()
+            CONFIG["settings"]["cloud_ai_base_url"] = self.entry_cloud_url.get().strip()
+            CONFIG["settings"]["cloud_ai_model"] = self.entry_cloud_model.get().strip()
+            CONFIG["settings"]["cloud_ai_auth_type"] = self.auth_type_var.get()
+            CONFIG["settings"]["cloud_ai_api_key"] = self.entry_cloud_key.get().strip()
+            CONFIG["settings"]["cloud_ai_username"] = self.entry_cloud_user.get().strip()
+            CONFIG["settings"]["cloud_ai_password"] = self.entry_cloud_pass.get().strip()
             
             with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
                 json.dump(CONFIG, f, indent=4)
-            messagebox.showinfo("Success", "Job search & AI settings updated successfully!")
+            messagebox.showinfo("Success", "Job search & Universal AI settings updated successfully!")
             log_message("Settings saved via Desktop GUI.")
             recalculate_metrics()
             self.controller.refresh_nav_buttons()
@@ -328,11 +434,21 @@ class SettingsView(ttk.Frame):
         self.settings_max_jobs.delete(0, 'end')
         self.settings_max_jobs.insert(0, str(CONFIG["settings"].get("max_jobs_per_query", 10)))
         
-        self.ai_provider_var.set(CONFIG["settings"].get("ai_provider", "local"))
-        self.entry_gemini_key.delete(0, 'end')
-        self.entry_gemini_key.insert(0, CONFIG["settings"].get("gemini_api_key", ""))
-        self.sel_gemini_model.set(CONFIG["settings"].get("gemini_model", "gemini-2.5-flash"))
+        prov_val = CONFIG["settings"].get("ai_provider", "local")
+        if prov_val == "gemini": prov_val = "cloud"
+        self.ai_provider_var.set(prov_val)
+        
+        self.sel_preset.set(CONFIG["settings"].get("cloud_ai_preset", "OpenAI / ChatGPT"))
+        self.entry_cloud_url.delete(0, 'end'); self.entry_cloud_url.insert(0, CONFIG["settings"].get("cloud_ai_base_url", "https://api.openai.com/v1"))
+        self.entry_cloud_model.delete(0, 'end'); self.entry_cloud_model.insert(0, CONFIG["settings"].get("cloud_ai_model", "gpt-4o-mini"))
+        
+        self.auth_type_var.set(CONFIG["settings"].get("cloud_ai_auth_type", "api_key"))
+        self.entry_cloud_key.delete(0, 'end'); self.entry_cloud_key.insert(0, CONFIG["settings"].get("cloud_ai_api_key", CONFIG["settings"].get("gemini_api_key", "")))
+        self.entry_cloud_user.delete(0, 'end'); self.entry_cloud_user.insert(0, CONFIG["settings"].get("cloud_ai_username", ""))
+        self.entry_cloud_pass.delete(0, 'end'); self.entry_cloud_pass.insert(0, CONFIG["settings"].get("cloud_ai_password", ""))
+        
         self.on_provider_changed()
+        self.on_auth_type_changed()
         
         self.sel_exp.set(CONFIG["settings"].get("experience_level", "All"))
         self.sel_jt.set(CONFIG["settings"].get("job_type", "All"))

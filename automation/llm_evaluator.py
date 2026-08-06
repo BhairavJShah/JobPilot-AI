@@ -1,7 +1,8 @@
 import re
 import json
 import urllib.request
-from core.config_manager import CONFIG, get_model_name, get_ai_provider, get_gemini_api_key, get_gemini_model
+import base64
+from core.config_manager import CONFIG, get_model_name, get_ai_provider, get_cloud_ai_config
 from core.db_manager import log_message
 
 MAX_RETRIES = 2
@@ -35,52 +36,88 @@ def query_local_qwen(prompt):
             log_message(f"Local {model} API error after {MAX_RETRIES + 1} attempts: {e}")
             return f"Ollama model '{model}' is unavailable or took too long to respond."
 
-def query_google_gemini(prompt):
-    """Query the Google Gemini API (Cloud AI)."""
-    api_key = get_gemini_api_key()
-    if not api_key:
-        log_message("Gemini API Key missing. Falling back to local Ollama...")
-        return query_local_qwen(prompt)
-        
-    g_model = get_gemini_model()
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={api_key}"
-    payload = {
-        "contents": [
-            {
-                "parts": [{"text": prompt}]
-            }
-        ]
-    }
+def query_cloud_ai(prompt):
+    """Universal Cloud AI query supporting API Key, Bearer Token, Username/Password Auth, and Custom REST endpoints."""
+    cfg = get_cloud_ai_config()
+    base_url = cfg["base_url"].rstrip('/')
+    model = cfg["model"]
+    auth_type = cfg["auth_type"]
+    api_key = cfg["api_key"]
+    username = cfg["username"]
+    password = cfg["password"]
+    
+    headers = {'Content-Type': 'application/json'}
+    
+    # 1. Setup Auth Headers (Bearer Token vs Username/Password Basic Auth)
+    if auth_type == "user_pass" or (username and password and not api_key):
+        userpass = f"{username}:{password}".encode('utf-8')
+        b64_userpass = base64.b64encode(userpass).decode('utf-8')
+        headers['Authorization'] = f"Basic {b64_userpass}"
+    elif api_key:
+        if "generativelanguage.googleapis.com" in base_url:
+            headers['x-goog-api-key'] = api_key
+        elif "anthropic.com" in base_url:
+            headers['x-api-key'] = api_key
+            headers['anthropic-version'] = '2023-06-01'
+        else:
+            headers['Authorization'] = f"Bearer {api_key}"
+            
+    # 2. Determine Endpoint & Payload format
+    if "generativelanguage.googleapis.com" in base_url:
+        endpoint = f"{base_url}/models/{model}:generateContent"
+        if api_key and 'x-goog-api-key' not in headers:
+            endpoint += f"?key={api_key}"
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    else:
+        # Standard OpenAI / Custom REST Chat Completions API
+        endpoint = f"{base_url}/chat/completions" if not base_url.endswith("/chat/completions") else base_url
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.2
+        }
+
     req_data = json.dumps(payload).encode('utf-8')
     
     for attempt in range(MAX_RETRIES + 1):
         req = urllib.request.Request(
-            url, 
+            endpoint, 
             data=req_data, 
-            headers={'Content-Type': 'application/json'}
+            headers=headers
         )
         try:
-            with urllib.request.urlopen(req, timeout=30) as response:
+            with urllib.request.urlopen(req, timeout=45) as response:
                 res = json.loads(response.read().decode('utf-8'))
-                candidates = res.get("candidates", [])
-                if candidates:
-                    parts = candidates[0].get("content", {}).get("parts", [])
+                
+                # Parse OpenAI / Custom style choices
+                if "choices" in res and len(res["choices"]) > 0:
+                    choice = res["choices"][0]
+                    if "message" in choice:
+                        return choice["message"].get("content", "").strip()
+                    elif "text" in choice:
+                        return choice["text"].strip()
+                # Parse Google style candidates
+                elif "candidates" in res and len(res["candidates"]) > 0:
+                    parts = res["candidates"][0].get("content", {}).get("parts", [])
                     if parts:
                         return parts[0].get("text", "").strip()
-                return ""
+                        
+                return json.dumps(res)
         except Exception as e:
             if attempt < MAX_RETRIES:
                 import time
                 time.sleep(1.5 * (attempt + 1))
                 continue
-            log_message(f"Google Gemini API error ({g_model}): {e}. Falling back to local Ollama...")
+            log_message(f"Universal Cloud AI error ({model} at {base_url}): {e}. Falling back to local Ollama...")
             return query_local_qwen(prompt)
 
 def query_ai_model(prompt):
-    """Query either Local Ollama or Google Gemini based on user setting."""
+    """Query either Local Ollama or Universal Cloud AI based on user setting."""
     provider = get_ai_provider()
-    if provider == "gemini" and get_gemini_api_key():
-        return query_google_gemini(prompt)
+    if provider == "cloud":
+        return query_cloud_ai(prompt)
     else:
         return query_local_qwen(prompt)
 
