@@ -4,7 +4,7 @@ import json
 import tkinter as tk
 from tkinter import ttk
 import core.state as state
-from core.config_manager import CONFIG, CONFIG_PATH, get_model_name
+from core.config_manager import CONFIG, CONFIG_PATH, get_model_name, get_active_model_display
 from core.db_manager import APPLIED_DB_PATH, recalculate_metrics
 from ui.dashboard_view import DashboardView
 from ui.history_view import HistoryView
@@ -93,9 +93,10 @@ class AppWindow(tk.Tk):
         status_f = tk.Frame(self.top_bar, bg="#1e293b")
         status_f.pack(side='left', padx=15, fill='y')
         
-        model_name = get_model_name()
-        self.ind_qwen = tk.Label(status_f, text=f"● {model_name} (Local RAG): Ready", bg="#1e293b", fg="#10b981", font=('Segoe UI', 8, 'bold'))
+        active_disp = get_active_model_display()
+        self.ind_qwen = tk.Label(status_f, text=f"● {active_disp}: Ready", bg="#1e293b", fg="#10b981", font=('Segoe UI', 8, 'bold'), cursor="hand2")
         self.ind_qwen.pack(side='left', padx=10)
+        self.ind_qwen.bind("<Button-1>", lambda e: self.show_view('settings'))
         
         self.ind_edge = tk.Label(status_f, text="● Edge Driver: Connected", bg="#1e293b", fg="#94a3b8", font=('Segoe UI', 8, 'bold'))
         self.ind_edge.pack(side='left', padx=10)
@@ -181,8 +182,7 @@ class AppWindow(tk.Tk):
         self.views['settings'].reload_view_data()
         self.views['profile'].reload_profile_fields()
         
-        model_name = get_model_name()
-        self.ind_qwen.config(text=f"● {model_name} (Local RAG): Ready")
+        self.ind_qwen.config(text=f"● {get_active_model_display()}: Ready")
         
         recalculate_metrics()
         self.refresh_nav_buttons()

@@ -49,7 +49,10 @@ DEFAULT_CONFIG = {
         "location_scope": "Entire Country",
         "preferred_locations": ["Mumbai, Maharashtra, India", "Bangalore, Karnataka, India"],
         "target_platforms": ["Indeed", "Naukri", "LinkedIn"],
-        "ollama_model": "qwen2.5:7b"
+        "ollama_model": "qwen2.5:7b",
+        "ai_provider": "local",
+        "gemini_api_key": "",
+        "gemini_model": "gemini-2.5-flash"
     },
     "accounts": {
         "indeed_email": "",
@@ -139,6 +142,24 @@ def get_installed_ollama_models():
         return [m['name'] for m in data.get("models", [])]
     except Exception:
         return []
+
+def get_ai_provider():
+    return CONFIG.get("settings", {}).get("ai_provider", "local")
+
+def get_gemini_api_key():
+    return CONFIG.get("settings", {}).get("gemini_api_key", "").strip()
+
+def get_gemini_model():
+    return CONFIG.get("settings", {}).get("gemini_model", "gemini-2.5-flash")
+
+def get_active_model_display():
+    provider = get_ai_provider()
+    if provider == "gemini":
+        g_model = get_gemini_model()
+        return f"☁️ Gemini ({g_model})"
+    else:
+        l_model = get_model_name()
+        return f"🤖 Local ({l_model})"
 
 # Initial load
 load_config()

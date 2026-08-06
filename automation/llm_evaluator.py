@@ -1,7 +1,7 @@
 import re
 import json
 import urllib.request
-from core.config_manager import CONFIG, get_model_name
+from core.config_manager import CONFIG, get_model_name, get_ai_provider, get_gemini_api_key, get_gemini_model
 from core.db_manager import log_message
 
 MAX_RETRIES = 2
@@ -35,6 +35,55 @@ def query_local_qwen(prompt):
             log_message(f"Local {model} API error after {MAX_RETRIES + 1} attempts: {e}")
             return f"Ollama model '{model}' is unavailable or took too long to respond."
 
+def query_google_gemini(prompt):
+    """Query the Google Gemini API (Cloud AI)."""
+    api_key = get_gemini_api_key()
+    if not api_key:
+        log_message("Gemini API Key missing. Falling back to local Ollama...")
+        return query_local_qwen(prompt)
+        
+    g_model = get_gemini_model()
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={api_key}"
+    payload = {
+        "contents": [
+            {
+                "parts": [{"text": prompt}]
+            }
+        ]
+    }
+    req_data = json.dumps(payload).encode('utf-8')
+    
+    for attempt in range(MAX_RETRIES + 1):
+        req = urllib.request.Request(
+            url, 
+            data=req_data, 
+            headers={'Content-Type': 'application/json'}
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as response:
+                res = json.loads(response.read().decode('utf-8'))
+                candidates = res.get("candidates", [])
+                if candidates:
+                    parts = candidates[0].get("content", {}).get("parts", [])
+                    if parts:
+                        return parts[0].get("text", "").strip()
+                return ""
+        except Exception as e:
+            if attempt < MAX_RETRIES:
+                import time
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            log_message(f"Google Gemini API error ({g_model}): {e}. Falling back to local Ollama...")
+            return query_local_qwen(prompt)
+
+def query_ai_model(prompt):
+    """Query either Local Ollama or Google Gemini based on user setting."""
+    provider = get_ai_provider()
+    if provider == "gemini" and get_gemini_api_key():
+        return query_google_gemini(prompt)
+    else:
+        return query_local_qwen(prompt)
+
 def evaluate_job_with_qwen(title, description):
     import core.state as state
     
@@ -63,7 +112,7 @@ Respond ONLY in the following JSON format:
   "should_approve": true/false
 }}
 """
-    res_text = query_local_qwen(prompt)
+    res_text = query_ai_model(prompt)
     
     # Track session evaluation count
     state.SESSION_STATS["evaluated_today"] = state.SESSION_STATS.get("evaluated_today", 0) + 1

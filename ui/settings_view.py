@@ -29,12 +29,28 @@ class SettingsView(ttk.Frame):
         card = ttk.Frame(scrollable_frame, style='Card.TFrame', padding=25)
         card.pack(fill='both', expand=True, padx=5, pady=5)
         
-        # Model Selector Block
-        f_model = ttk.Frame(card)
-        f_model.pack(fill='x', pady=5)
-        ttk.Label(f_model, text="Ollama Model Selection", font=('Segoe UI', 9, 'bold'), foreground='#94a3b8').pack(anchor='w', pady=(0, 4))
+        # AI Provider & Model Selector Block
+        f_ai = ttk.Frame(card)
+        f_ai.pack(fill='x', pady=10)
+        ttk.Label(f_ai, text="AI Engine Provider & Intelligence Source", style='CardHeading.TLabel').pack(anchor='w', pady=(0, 6))
         
-        model_row = ttk.Frame(f_model)
+        f_prov = ttk.Frame(f_ai)
+        f_prov.pack(fill='x', pady=4)
+        
+        self.ai_provider_var = tk.StringVar(value=CONFIG["settings"].get("ai_provider", "local"))
+        
+        rb_local = tk.Radiobutton(f_prov, text="🤖 Local Ollama (100% Private / Offline)", variable=self.ai_provider_var, value="local", command=self.on_provider_changed, bg='#1e293b', fg='white', selectcolor='#0f172a', font=('Segoe UI', 9, 'bold'))
+        rb_local.pack(side='left', padx=(0, 20))
+        
+        rb_gemini = tk.Radiobutton(f_prov, text="☁️ Google Gemini (Cloud AI / Ultra-Fast 0.5s)", variable=self.ai_provider_var, value="gemini", command=self.on_provider_changed, bg='#1e293b', fg='white', selectcolor='#0f172a', font=('Segoe UI', 9, 'bold'))
+        rb_gemini.pack(side='left')
+
+        # Frame for Local Ollama Settings
+        self.f_ollama_sub = ttk.Frame(f_ai)
+        self.f_ollama_sub.pack(fill='x', pady=5)
+        ttk.Label(self.f_ollama_sub, text="Local Ollama Model", font=('Segoe UI', 9, 'bold'), foreground='#94a3b8').pack(anchor='w', pady=(0, 4))
+        
+        model_row = ttk.Frame(self.f_ollama_sub)
         model_row.pack(fill='x')
         self.sel_model = ttk.Combobox(model_row, state="readonly")
         self.sel_model.pack(side='left', fill='x', expand=True, padx=(0, 10))
@@ -43,7 +59,36 @@ class SettingsView(ttk.Frame):
         btn_refresh_models.pack(side='left')
         btn_refresh_models.config(command=self.refresh_models)
         make_btn_interactive(btn_refresh_models, "#3b82f6", "#2563eb", "white", "white")
+
+        # Frame for Google Gemini Cloud Settings
+        self.f_gemini_sub = ttk.Frame(f_ai)
+        self.f_gemini_sub.pack(fill='x', pady=5)
         
+        gem_grid = ttk.Frame(self.f_gemini_sub)
+        gem_grid.pack(fill='x')
+        gem_grid.columnconfigure(0, weight=2)
+        gem_grid.columnconfigure(1, weight=1)
+        
+        f_key = ttk.Frame(gem_grid)
+        f_key.grid(row=0, column=0, sticky='ew', padx=(0, 10))
+        ttk.Label(f_key, text="Google Gemini API Key (from Google AI Studio)", font=('Segoe UI', 9, 'bold'), foreground='#94a3b8').pack(anchor='w', pady=(0, 4))
+        self.entry_gemini_key = tk.Entry(f_key, bg="#080c14", fg="white", insertbackground="white", bd=0, highlightthickness=1, highlightbackground="#1f2937", font=('Segoe UI', 10), show="*")
+        self.entry_gemini_key.pack(fill='x', ipady=6)
+        self.entry_gemini_key.insert(0, CONFIG["settings"].get("gemini_api_key", ""))
+        
+        f_gmod = ttk.Frame(gem_grid)
+        f_gmod.grid(row=0, column=1, sticky='ew')
+        ttk.Label(f_gmod, text="Gemini Model", font=('Segoe UI', 9, 'bold'), foreground='#94a3b8').pack(anchor='w', pady=(0, 4))
+        self.sel_gemini_model = ttk.Combobox(f_gmod, values=["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"], state="readonly")
+        self.sel_gemini_model.pack(fill='x')
+        self.sel_gemini_model.set(CONFIG["settings"].get("gemini_model", "gemini-2.5-flash"))
+        
+        btn_test_gemini = tk.Button(self.f_gemini_sub, text="⚡ Test Gemini Key", font=('Segoe UI', 9, 'bold'), padx=12, pady=4)
+        btn_test_gemini.pack(anchor='w', pady=(8, 0))
+        btn_test_gemini.config(command=self.test_gemini_key)
+        make_btn_interactive(btn_test_gemini, "#10b981", "#059669", "white", "white")
+
+        self.on_provider_changed()
         self.refresh_models()
 
         # Tag/Chip Containers for Queries & Skip Keywords
@@ -166,6 +211,32 @@ class SettingsView(ttk.Frame):
 
         enable_canvas_mousewheel(canvas)
 
+    def on_provider_changed(self):
+        prov = self.ai_provider_var.get()
+        if prov == "gemini":
+            self.f_ollama_sub.pack_forget()
+            self.f_gemini_sub.pack(fill='x', pady=5)
+        else:
+            self.f_gemini_sub.pack_forget()
+            self.f_ollama_sub.pack(fill='x', pady=5)
+
+    def test_gemini_key(self):
+        key = self.entry_gemini_key.get().strip()
+        if not key:
+            messagebox.showerror("Error", "Please enter a Google Gemini API Key.")
+            return
+        g_model = self.sel_gemini_model.get()
+        import urllib.request
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={key}"
+        payload = {"contents": [{"parts": [{"text": "Hello, respond with 'Connected'"}]}]}
+        try:
+            req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers={'Content-Type': 'application/json'})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                res = json.loads(resp.read().decode('utf-8'))
+                messagebox.showinfo("Success", f"Google Gemini ({g_model}) connected successfully!")
+        except Exception as e:
+            messagebox.showerror("Connection Error", f"Gemini API test failed: {e}")
+
     def refresh_models(self):
         models = get_installed_ollama_models()
         self.sel_model.config(values=models)
@@ -237,10 +308,13 @@ class SettingsView(ttk.Frame):
             CONFIG["settings"]["location_scope"] = self.sel_scope.get()
             CONFIG["settings"]["target_platforms"] = plat_list
             CONFIG["settings"]["ollama_model"] = self.sel_model.get()
+            CONFIG["settings"]["ai_provider"] = self.ai_provider_var.get()
+            CONFIG["settings"]["gemini_api_key"] = self.entry_gemini_key.get().strip()
+            CONFIG["settings"]["gemini_model"] = self.sel_gemini_model.get()
             
             with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
                 json.dump(CONFIG, f, indent=4)
-            messagebox.showinfo("Success", "Job search settings updated successfully!")
+            messagebox.showinfo("Success", "Job search & AI settings updated successfully!")
             log_message("Settings saved via Desktop GUI.")
             recalculate_metrics()
             self.controller.refresh_nav_buttons()
@@ -253,6 +327,12 @@ class SettingsView(ttk.Frame):
         self.settings_min_score.insert(0, str(CONFIG["settings"]["min_score"]))
         self.settings_max_jobs.delete(0, 'end')
         self.settings_max_jobs.insert(0, str(CONFIG["settings"].get("max_jobs_per_query", 10)))
+        
+        self.ai_provider_var.set(CONFIG["settings"].get("ai_provider", "local"))
+        self.entry_gemini_key.delete(0, 'end')
+        self.entry_gemini_key.insert(0, CONFIG["settings"].get("gemini_api_key", ""))
+        self.sel_gemini_model.set(CONFIG["settings"].get("gemini_model", "gemini-2.5-flash"))
+        self.on_provider_changed()
         
         self.sel_exp.set(CONFIG["settings"].get("experience_level", "All"))
         self.sel_jt.set(CONFIG["settings"].get("job_type", "All"))
