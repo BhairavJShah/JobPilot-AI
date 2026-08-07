@@ -180,11 +180,14 @@ If your computer has low specs (e.g. 4GB RAM), use Cloud API mode for **instant 
 After installing dependencies and setting up your AI engine (Ollama or Cloud API), follow these steps to set up and run JobPilot-AI:
 
 ### 1. Launch the Application
-- **Windows**: Double-click `run_app.bat` or run:
+- **Windows (1-Click Launcher)**: Simply double-click `run_app.bat` inside the cloned directory.
+  > 💡 *Note: `run_app.bat` uses `%~dp0` to automatically detect your current folder path on any drive or directory, so you don't need to edit any `cd` paths!*
+  
+  Or launch manually via Command Prompt / PowerShell:
   ```powershell
   python gui_app.py
   ```
-- **Linux / macOS**: Open terminal inside the project folder and run:
+- **Linux / macOS**: Open terminal inside the project directory and run:
   ```bash
   python3 gui_app.py
   ```
@@ -205,10 +208,15 @@ After installing dependencies and setting up your AI engine (Ollama or Cloud API
 - **SMTP Mail Server**: Enter your SMTP host (e.g. `smtp.gmail.com`), port (`587`), email address, and App Password to enable direct 1-click recruiter email outreach.
 - Click **Save Credentials**.
 
-#### 🧠 Step 3: Configure AI Engine (`⚙ AI & Search`)
-- Choose your **AI Engine Provider**:
-  - **Local Ollama (Offline)**: Select your installed Ollama model (`qwen2.5:7b`, `3b`, or `1.5b`).
-  - **Cloud AI / REST API**: Choose a preset (Groq, DeepSeek, OpenAI, Gemini), enter your API Key, and click **⚡ Test Connection**.
+#### 🧠 Step 3: Configure AI Engine & Connect Local AI (`⚙ AI & Search`)
+- **Connecting Local AI (Ollama)**:
+  - Ensure Ollama service is running locally (`ollama serve` or Ollama system tray icon).
+  - The app connects to the default local path: `http://127.0.0.1:11434/api/generate`.
+  - In the App Settings GUI under **AI Engine Provider**, select **Local Ollama (Offline)**.
+  - Click **Refresh Models** — the app will automatically query your local Ollama path and populate the dropdown with all models installed on your system (e.g., `qwen2.5:7b`, `3b`, or `1.5b`).
+- **Connecting Cloud AI (REST API)**:
+  - Select **Cloud AI / REST API**.
+  - Choose a preset (Groq, DeepSeek, OpenAI, Gemini), enter your API Key, and click **⚡ Test Connection**.
 
 #### 🎯 Step 4: Job Search Queries & Safety Limits (`⚙ AI & Search`)
 - **Target Job Queries**: Add roles you want to target (e.g., *Software Engineer*, *AI Developer*, *Full Stack Engineer*).
