@@ -533,3 +533,12 @@ class SettingsView(ctk.CTkFrame):
         self.settings_skip.update_items(CONFIG["settings"]["skip_keywords"])
         self.settings_locations.update_items(CONFIG["settings"].get("preferred_locations", []))
         self.refresh_models()
+        
+        # Reload safety settings
+        if CONFIG["settings"].get("safe_mode", True):
+            self.sw_safe_mode.select()
+        else:
+            self.sw_safe_mode.deselect()
+        self.settings_daily_cap.delete(0, 'end'); self.settings_daily_cap.insert(0, str(CONFIG["settings"].get("daily_apply_cap", 25)))
+        self.settings_min_delay.delete(0, 'end'); self.settings_min_delay.insert(0, str(CONFIG["settings"].get("min_delay_seconds", 15)))
+        self.settings_max_delay.delete(0, 'end'); self.settings_max_delay.insert(0, str(CONFIG["settings"].get("max_delay_seconds", 45)))

@@ -87,8 +87,8 @@ async def verify_naukri_auth(page):
         
         login_btn = page.locator("a#login_Layer")
         if await login_btn.count() > 0:
-            email = CONFIG["accounts"].get("naukri_email", "")
-            password = CONFIG["accounts"].get("naukri_pass", "")
+            email = CONFIG.get("accounts", {}).get("naukri_email", "")
+            password = CONFIG.get("accounts", {}).get("naukri_pass", "")
             if email and password:
                 log_message("Attempting automatic login to Naukri...")
                 try:
@@ -131,8 +131,8 @@ async def verify_linkedin_auth(page):
         await asyncio.sleep(3)
         
         if "feed" not in page.url:
-            email = CONFIG["accounts"].get("linkedin_email", "")
-            password = CONFIG["accounts"].get("linkedin_pass", "")
+            email = CONFIG.get("accounts", {}).get("linkedin_email", "")
+            password = CONFIG.get("accounts", {}).get("linkedin_pass", "")
             if email and password:
                 log_message("Attempting automatic login to LinkedIn...")
                 try:
@@ -199,6 +199,10 @@ async def process_job_evaluation(title, company, href, desc_text, platform, desc
     DB save, and screenshot pattern.
     Returns True if applied/suggested, False if skipped.
     """
+    # Safety check: enforce daily application cap
+    if await check_safety_limit():
+        return False
+    
     contacts = extract_recruiter_contacts(desc_text)
     email_matches = contacts["emails"]
     phone_matches = contacts["phones"]
@@ -211,7 +215,13 @@ async def process_job_evaluation(title, company, href, desc_text, platform, desc
         hr_str = hr_matches[0] if hr_matches else "Hiring Manager"
         save_recruiter_contact(company, title, hr_str, e_str, p_str, platform, href)
         
-    eval_res = evaluate_job_with_qwen(title, desc_text)
+    try:
+        eval_res = evaluate_job_with_qwen(title, desc_text)
+        if eval_res is None:
+            eval_res = {}
+    except Exception as e:
+        log_message(f"LLM evaluation error for '{title}': {e}")
+        eval_res = {}
     score = eval_res.get("score", 0)
     is_match = eval_res.get("is_match", False)
     reason = eval_res.get("reason", "")
@@ -504,9 +514,9 @@ async def run_bot_async():
                                     log_message(f"Indeed check error: {e}")
                                 finally:
                                     await desc_page.close()
-                                await asyncio.sleep(random.uniform(3.0, 7.0))
-                            if jobs_processed < max_jobs:
-                                break # Didn't even hit max jobs, probably no need to paginate
+                                await human_delay()
+                            if jobs_processed == 0:
+                                break # No jobs found on this page, stop paginating
 
             # Naukri automation loop task
             async def run_naukri_loop(page):
@@ -641,10 +651,10 @@ async def run_bot_async():
                                 if await title_el.count() == 0: continue
                                 title = await title_el.first.inner_text()
                                 href = await title_el.first.get_attribute("href")
-                                if href and href.startswith("/"):
+                                if not href: continue
+                                if href.startswith("/"):
                                     href = "https://www.linkedin.com" + href
-                                if href:
-                                    href = href.split("?")[0] # Clean params
+                                href = href.split("?")[0] # Clean params
                                     
                                 if href in APPLIED_URLS_SET: continue
                                 
