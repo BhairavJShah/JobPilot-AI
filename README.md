@@ -1,109 +1,240 @@
-# ✦ Job AI Agent (Desktop Assistant)
+# 🚀 JobPilot-AI (jobLLM) — Autonomous Job Search & Outreach Assistant
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](#installation)
-[![Local LLM: Ollama](https://img.shields.io/badge/LLM-Ollama_Configurable-purple.svg)](https://ollama.com)
+[![GUI: CustomTkinter](https://img.shields.io/badge/GUI-CustomTkinter_v6-indigo.svg)](#features)
+[![Local LLM: Ollama](https://img.shields.io/badge/Local_LLM-Ollama_Qwen2.5-purple.svg)](https://ollama.com)
+[![Cloud AI: Universal](https://img.shields.io/badge/Cloud_AI-OpenAI_DeepSeek_Groq_Gemini-green.svg)](#ai-setup-guide)
 
-An advanced, stealthy desktop automation assistant that concurrently crawls major job platforms (**Indeed**, **Naukri**, and **LinkedIn**), parses your local PDF resume, evaluates fit dynamically using a **local LLM via Ollama**, and automatically helps you apply in real time!
-
----
-
-## 🚀 Key Features
-
-* **Parallel Multi-Tab Browser Automation:** Runs Chromium Playwright tabs concurrently in a unified, persistent Edge debug profile context, maintaining your browser login sessions seamlessly.
-* **Local RAG & LLM Evaluation:** Interacts with a configurable local LLM via Ollama (default: `qwen2.5:7b`). It reads your raw PDF resume text, evaluates job description fits, and calculates similarity match scores dynamically. Includes automatic retry with exponential backoff.
-* **Doubt Queue Approvals:** Flagged or high-salary borderline jobs are held in a manual review queue where you can read match explanations and click "Approve & Apply" or "Reject".
-* **Geographic Hierarchy Selector:** Choose countries, states, and specific cities using a side-by-side hierarchical selection dropdown.
-* **Tag Chip Badging Component:** Enter skills, skip keywords, and target roles block-by-block using tag chips with real-time delete buttons.
-* **AI Cold Email Cover Letter Drafts:** Auto-generates customized outreach cover letters in your Suggestions tab based on your resume context, providing instant clip-board copy and `mailto:` action routing.
-* **Direct SMTP Email Outreach:** Send AI-generated cover letters with resume attachment directly from the app via configured SMTP server.
-* **Stealth Controls:** Utilizes automation stealth flags (`--disable-blink-features=AutomationControlled`, remote debugging ports) to avoid antibot detection scripts.
-* **Configurable LLM Model:** Switch between installed Ollama models directly from the Settings GUI — auto-detects available models.
-* **Dashboard Analytics:** Real-time metrics including Applications Sent, Jobs Skipped, Success Rate, and Today's session activity counters.
-* **Log Search & Filtering:** Search through bot operation logs by keyword in real time.
-* **Pause & Resume:** Pause the bot at any time without losing state, then resume when ready.
-* **Indeed Pagination:** Automatically crawls up to 3 pages of search results per query for broader coverage.
-* **Export History:** Export your full application history to CSV with one click.
-* **Smart Form Polling:** Replaces fixed wait times with intelligent polling that checks for form submission completion every 3 seconds.
-* **Auto-Retry:** Transient navigation failures are automatically retried with exponential backoff.
+An advanced, stealthy desktop assistant that concurrently crawls major job platforms (**Indeed**, **Naukri**, and **LinkedIn**), evaluates job description match using a **Local LLM (Qwen 2.5 via Ollama)** or **Cloud REST API**, autofills applications, and extracts recruiter contacts for direct **WhatsApp & SMTP cold outreach**!
 
 ---
 
-## 🛠️ System Architecture
+## 🌟 Key Features
 
-```mermaid
-graph TD
-    A[Tkinter Desktop GUI App] -->|Reads config.json| B[Local Settings Panel]
-    A -->|Launches Bot Thread| C[Playwright Browser Engine]
-    C -->|Concurrently Spawns Tabs| D[Indeed Tab]
-    C -->|Concurrently Spawns Tabs| E[Naukri Tab]
-    C -->|Concurrently Spawns Tabs| F[LinkedIn Tab]
-    D & E & F -->|Scrapes Job Info| G[Local Ollama API]
-    G -->|Queries Configurable LLM| H[Resume PDF Context + History]
-    H -->|Scores Match Fits| I{Match Score >= Min?}
-    I -->|Yes - Clear Match| J[Easy Apply / Forms Fill]
-    I -->|Borderline / Doubt| K[Doubt Approvals Tab]
-    I -->|Needs Career Page / Email| L[Job Suggestions Tab]
-    J & K & L -->|Updates Status| M[applied_jobs.csv History Database]
-    M -->|Real-time update| A
-```
+- **🎨 Modern CustomTkinter Desktop GUI**: Sleek dark glassmorphism interface with rounded controls, real-time log streaming, and metric analytics.
+- **🤖 Dual AI Engine (Local + Cloud)**:
+  - **Local Ollama Mode**: 100% Private, zero cloud costs using `qwen2.5:7b`, `3b`, or `1.5b`.
+  - **Cloud REST API Mode**: Zero system load for low-spec PCs using OpenAI, DeepSeek, Groq, Google Gemini, or Custom Endpoints.
+- **📇 Recruiter Contact Extractor & Direct Outreach**: Automatically detects HR emails, phone numbers, and recruiter names. Provides 1-click **WhatsApp Direct Chat (`wa.me`)** and **SMTP Direct Email Outreach**.
+- **📄 AI Resume Tailorer & PDF Generator**: Automatically rewrites professional summaries and achievement bullets tailored for target job descriptions, exporting formatted PDF resumes on demand.
+- **📑 Candidate QA Vault (Smart ATS Memory)**: Stores experience years, notice period, salary expectations, work authorization, and relocation preferences for intelligent form auto-filling.
+- **🛡️ Account Safety & Anti-Bot Protection**: Configurable daily application caps and randomized human typing/browsing delays (15s–45s) to protect your job board accounts.
+- **⚑ Doubt Queue Approvals**: Holds borderline or high-salary jobs in a manual review queue where you can review AI explanations before applying.
 
 ---
 
-## 📦 Installation & Setup
+## 💻 System Requirements
 
-### 1. Prerequisites
-* **Python 3.10 or higher** installed.
-* **Ollama Desktop Client** installed.
-* **Microsoft Edge** browser installed.
+| System Spec | Recommended AI Setup | System Load |
+|---|---|---|
+| **Low Specs** (4GB RAM, Dual-Core CPU, No GPU) | **Cloud API Mode** (Groq / DeepSeek / Gemini) OR `qwen2.5:1.5b` | **0% PC Lag** |
+| **Mid Specs** (8GB–16GB RAM, i5/i7 CPU) | **Local Ollama Mode** (`qwen2.5:3b` or `qwen2.5:7b`) | **100% Private** |
+| **High Specs** (16GB+ RAM, NVIDIA GPU) | **Local Ollama Mode** (`qwen2.5:7b` or `qwen2.5:14b`) | Maximum Performance |
 
-### 2. Set Up Local LLM (Ollama)
-Download and run a local model in your terminal:
-```bash
-ollama run qwen2.5:7b
-```
-Ensure Ollama is running in the background (accessible via `http://localhost:11434`).
+---
 
-> **Tip:** You can switch models from the Settings tab in the app. Any model installed in Ollama will appear in the dropdown.
+## ⚙️ Installation Guide (Cross-Platform)
 
-### 3. Clone & Install Dependencies
-1. Clone this repository to your computer.
-2. Initialize virtual environment and install requirements:
-```bash
+### 🪟 Windows (10/11)
+
+```powershell
+# 1. Clone Repository
+git clone https://github.com/BhairavJShah/job_LLM.git
+cd job_LLM
+
+# 2. Create Virtual Environment
+python -m venv venv
+.\venv\Scripts\activate
+
+# 3. Install Dependencies
 pip install -r requirements.txt
-playwright install
+playwright install chromium
 ```
-
-### 4. Setup Configuration
-Rename the configuration template file:
-* Copy `config.json.example` to `config.json`.
-* Open it and edit your technical skills, job queries, and optional account credentials.
 
 ---
 
-## 🚦 Usage
+### 🐧 Linux (Ubuntu, Debian, Fedora, Arch, Manjaro)
 
-1. Launch the desktop application by double-clicking **`run_app.bat`** or executing:
-   ```bash
-   python gui_app.py
-   ```
-2. Navigate to **Job Board Logins** and enter your credentials (Indeed, Naukri, LinkedIn) or log in manually in the Edge tabs once the browser launches.
-3. Select your target roles, experience levels, and geographic scope under **Search Settings**.
-4. Navigate to the **Dashboard** and click **Start Bot**.
-5. Use the **Pause** button to temporarily halt the bot without losing progress.
-6. Keep an eye on your **Doubt Approvals** and **Job Suggestions** tabs for new notification notches!
+#### Ubuntu / Debian / Mint:
+```bash
+# 1. System Dependencies
+sudo apt update && sudo apt install -y python3 python3-pip python3-venv git
+
+# 2. Clone & Setup
+git clone https://github.com/BhairavJShah/job_LLM.git
+cd job_LLM
+python3 -m venv venv
+source venv/bin/activate
+
+# 3. Install Python Dependencies & Playwright System Libraries
+pip install -r requirements.txt
+playwright install --with-deps chromium
+```
+
+#### Fedora / RHEL / CentOS:
+```bash
+sudo dnf install -y python3 python3-pip git
+git clone https://github.com/BhairavJShah/job_LLM.git
+cd job_LLM
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+playwright install --with-deps chromium
+```
+
+#### Arch Linux / Manjaro:
+```bash
+sudo pacman -S python python-pip git
+git clone https://github.com/BhairavJShah/job_LLM.git
+cd job_LLM
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+playwright install --with-deps chromium
+```
+
+---
+
+### 🍎 macOS (Apple Silicon M1/M2/M3/M4 & Intel)
+
+```bash
+# 1. Clone Repository
+git clone https://github.com/BhairavJShah/job_LLM.git
+cd job_LLM
+
+# 2. Create Virtual Environment
+python3 -m venv venv
+source venv/bin/activate
+
+# 3. Install Dependencies
+pip install -r requirements.txt
+playwright install chromium
+```
+
+---
+
+## 🧠 AI Setup Guide (Local vs Cloud)
+
+### Option A: Local AI Setup (Ollama — 100% Private)
+
+#### 🪟 Windows:
+1. Download installer from **[ollama.com/download/windows](https://ollama.com/download/windows)**.
+2. Run `OllamaSetup.exe`.
+3. Open Command Prompt or PowerShell and pull a model:
+
+```powershell
+# For Low/Mid Spec PCs (Fast ~1.1GB):
+ollama pull qwen2.5:1.5b
+
+# For Mid Spec PCs (Recommended balance ~2.0GB):
+ollama pull qwen2.5:3b
+
+# For High Spec PCs (High accuracy ~4.7GB):
+ollama pull qwen2.5:7b
+```
+
+#### 🐧 Linux (All Distros):
+Run the official single-line install script:
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Pull your model:
+ollama pull qwen2.5:3b
+```
+
+#### 🍎 macOS:
+Install via Homebrew or direct DMG download:
+
+```bash
+# Via Homebrew:
+brew install ollama
+
+# Start service & pull model:
+ollama serve &
+ollama pull qwen2.5:3b
+```
+
+*In the App Settings GUI, select **Local Ollama** and pick your installed model!*
+
+---
+
+### Option B: Cloud AI Setup (Zero System Load for Low-Spec PCs)
+
+If your computer has low specs (e.g. 4GB RAM), use Cloud API mode for **instant AI evaluation with 0% system load**:
+
+1. Open the App ➔ Navigate to **AI & Search Settings**.
+2. Select **Cloud AI / REST API**.
+3. Choose your provider preset:
+   - **Groq** (Super fast, free tier available) ➔ Base URL: `https://api.groq.com/openai/v1`, Model: `llama-3.3-70b-versatile`
+   - **DeepSeek** ➔ Base URL: `https://api.deepseek.com/v1`, Model: `deepseek-chat`
+   - **OpenAI** ➔ Base URL: `https://api.openai.com/v1`, Model: `gpt-4o-mini`
+   - **Google AI** ➔ Base URL: `https://generativelanguage.googleapis.com/v1beta`, Model: `gemini-2.5-flash`
+4. Enter your API Key or Username/Password, click **⚡ Test Connection**, and save!
+
+---
+
+## 🚀 Running the Application
+
+Launch the desktop GUI:
+
+```bash
+python gui_app.py
+```
+
+### Initial Configuration in GUI:
+1. **My Profile**: Fill in your name, email, phone, resume path, and technical skills. Fill out the **Candidate QA Vault** for smart ATS form autofilling.
+2. **Credentials**: Optionally enter your logins for Indeed, Naukri, LinkedIn, and SMTP mail server.
+3. **AI & Search**: Customize job search queries (e.g., *Python Developer*, *AI Engineer*), skip keywords, location scope, and daily application safety caps.
+4. **Start Bot**: Click **▶ Start Bot** on the Control Dashboard!
+
+---
+
+## 📂 Project Structure
+
+```
+JobPilot-AI/
+├── automation/             # Playwright automation, LLM evaluators, fast scrapers
+│   ├── bot_runner.py       # Multi-platform browser crawler & safety engine
+│   ├── form_autofiller.py  # Smart ATS QA Vault form autofiller
+│   ├── job_scraper.py      # Rapid multi-site job search scraper
+│   ├── llm_evaluator.py    # Dual Local/Cloud LLM evaluation logic
+│   └── status_tracker.py   # Application status scanner
+├── core/                   # System core modules
+│   ├── config_manager.py   # JSON configuration & location hierarchy manager
+│   ├── contact_extractor.py# Regex & AI recruiter contact extractor
+│   ├── db_manager.py       # CSV database logger & metrics engine
+│   ├── email_smtp.py       # Direct SMTP outreach engine
+│   ├── resume_exporter.py # AI-tailored PDF resume generator
+│   └── resume_parser.py   # PyPDF2 resume parser
+├── ui/                     # CustomTkinter Dark GUI Views
+│   ├── app_window.py       # Main window & sidebar navigation
+│   ├── components.py       # Design system, pill-chips, rounded CTk widgets
+│   ├── dashboard_view.py   # Analytics dashboard & RAG AI assistant chat
+│   ├── history_view.py     # Application history table
+│   ├── suggestions_view.py # Career suggestions & cover letter generator
+│   ├── approvals_view.py   # Human-in-the-loop doubt queue approvals
+│   ├── contacts_view.py    # Recruiter contacts, WhatsApp & SMTP outreach
+│   ├── settings_view.py    # AI provider, search thresholds & safety settings
+│   ├── profile_view.py     # Candidate profile & ATS QA vault setup
+│   └── accounts_view.py    # Platform logins & SMTP credentials setup
+├── gui_app.py              # Application entry point
+├── config.json             # Local user configuration file (Git-ignored)
+├── applied_jobs.csv        # Application database (Git-ignored)
+└── recruiter_contacts.csv  # Recruiter database (Git-ignored)
+```
 
 ---
 
 ## 🔒 Security & Privacy
 
-> [!IMPORTANT]
-> Your credentials and application history database are stored **entirely locally** on your computer inside `config.json` and `applied_jobs.csv`. 
-> 
-> The `.gitignore` file included in this project is pre-configured to ensure your private configuration files, logs, database records, and browser profile cookies are **never** committed to a public Git repository.
+- **Local Credentials**: All passwords and API keys are stored locally in `config.json`, which is automatically ignored by `.gitignore`.
+- **Local LLM Mode**: Zero data leaves your computer when running with local Ollama.
+- **Local Edge Profile**: Chrome/Edge browser automation uses a local persistent profile context on your machine.
 
 ---
 
 ## 📄 License
 
-Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
+Distributed under the MIT License. See `LICENSE` for more details.

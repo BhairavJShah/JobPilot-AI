@@ -4,6 +4,7 @@ import re
 import json
 import webbrowser
 import threading
+import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 from core.config_manager import CONFIG
@@ -11,29 +12,31 @@ from core.db_manager import APPLIED_DB_PATH, log_message, recalculate_metrics, u
 from core.resume_parser import extract_resume_text
 from core.email_smtp import send_smtp_email
 from automation.llm_evaluator import query_local_qwen
-from ui.components import make_btn_interactive
+from ui.components import C, F, create_action_btn
 
-class SuggestionsView(ttk.Frame):
+class SuggestionsView(ctk.CTkFrame):
     def __init__(self, parent, controller):
-        super().__init__(parent)
+        super().__init__(parent, fg_color="transparent")
         self.controller = controller
         
-        title_row = ttk.Frame(self)
-        title_row.pack(fill='x', pady=(0, 20))
-        lbl_title = ttk.Label(title_row, text="Career Page & Email Suggestions", style='Heading.TLabel')
+        # ── Header ──
+        title_row = ctk.CTkFrame(self, fg_color="transparent")
+        title_row.pack(fill='x', pady=(0, 14))
+        lbl_title = ctk.CTkLabel(title_row, text="Career Suggestions", font=F["h1"], text_color=C["text"])
         lbl_title.pack(side='left')
         
-        card_split = ttk.Frame(self)
+        # ── Split Layout ──
+        card_split = ctk.CTkFrame(self, fg_color="transparent")
         card_split.pack(fill='both', expand=True)
         card_split.columnconfigure(0, weight=1)
         card_split.columnconfigure(1, weight=1)
         card_split.rowconfigure(0, weight=1)
         
-        left_card = ttk.Frame(card_split, style='Card.TFrame', padding=10)
-        left_card.grid(row=0, column=0, sticky='nsew', padx=(0, 10))
+        left_card = ctk.CTkFrame(card_split, fg_color=C["card"], corner_radius=12)
+        left_card.grid(row=0, column=0, sticky='nsew', padx=(0, 8))
         
         columns = ('company', 'role', 'detail')
-        self.sug_tree = ttk.Treeview(left_card, columns=columns, show='headings')
+        self.sug_tree = ttk.Treeview(left_card, columns=columns, show='headings', style="Dark.Treeview")
         self.sug_tree.heading('company', text='Company')
         self.sug_tree.heading('role', text='Role')
         self.sug_tree.heading('detail', text='Target Email/URL')
@@ -42,34 +45,43 @@ class SuggestionsView(ttk.Frame):
         self.sug_tree.column('role', width=130)
         self.sug_tree.column('detail', width=180)
         self.sug_tree.bind("<<TreeviewSelect>>", self.on_suggestion_select)
-        self.sug_tree.pack(fill='both', expand=True)
+        self.sug_tree.pack(fill='both', expand=True, padx=10, pady=10)
         
-        self.right_card = ttk.Frame(card_split, style='Card.TFrame', padding=15)
-        self.right_card.grid(row=0, column=1, sticky='nsew', padx=(10, 0))
+        self.right_card = ctk.CTkFrame(card_split, fg_color=C["card"], corner_radius=12)
+        self.right_card.grid(row=0, column=1, sticky='nsew', padx=(8, 0))
         
-        lbl_preview = ttk.Label(self.right_card, text="AI Generated Email Cover Letter Draft", style='CardHeading.TLabel')
-        lbl_preview.pack(anchor='w', pady=(0, 10))
+        preview_header = ctk.CTkFrame(self.right_card, fg_color="transparent")
+        preview_header.pack(fill='x', padx=14, pady=(12, 8))
+        lbl_preview = ctk.CTkLabel(preview_header, text="AI Cover Letter Draft", font=F["h3"], text_color=C["text"])
+        lbl_preview.pack(side='left')
         
-        self.sug_preview = scrolledtext.ScrolledText(self.right_card, bg="#080c14", fg="#cbd5e1", insertbackground="white", font=('Segoe UI', 9), wrap='word', bd=0)
-        self.sug_preview.pack(fill='both', expand=True, pady=(0, 10))
+        ai_badge = ctk.CTkLabel(preview_header, text="AUTO", fg_color=C["purple"], text_color="white",
+                                font=F["xs_b"], corner_radius=6, width=48, height=20)
+        ai_badge.pack(side='left', padx=(8, 0))
         
-        btn_row = ttk.Frame(self.right_card)
-        btn_row.pack(fill='x')
+        preview_inner = ctk.CTkFrame(self.right_card, fg_color=C["input"], corner_radius=8)
+        preview_inner.pack(fill='both', expand=True, padx=14, pady=(0, 10))
         
-        self.btn_copy_draft = tk.Button(btn_row, text="Copy Draft", font=('Segoe UI', 9, 'bold'), padx=15, pady=6)
-        self.btn_copy_draft.pack(side='left', padx=3)
-        self.btn_copy_draft.config(command=self.copy_draft_to_clipboard)
-        make_btn_interactive(self.btn_copy_draft, "#2563eb", "#1d4ed8", "white", "white")
+        self.sug_preview = scrolledtext.ScrolledText(preview_inner,
+            bg=C["input"], fg=C["text"],
+            insertbackground="white", font=F["sm"],
+            wrap='word', bd=0, highlightthickness=0)
+        self.sug_preview.pack(fill='both', expand=True, padx=6, pady=6)
         
-        self.btn_open_target = tk.Button(btn_row, text="Open URL", font=('Segoe UI', 9, 'bold'), padx=15, pady=6)
-        self.btn_open_target.pack(side='left', padx=3)
-        self.btn_open_target.config(command=self.open_suggestion_link)
-        make_btn_interactive(self.btn_open_target, "#10b981", "#059669", "white", "white")
+        btn_row = ctk.CTkFrame(self.right_card, fg_color="transparent")
+        btn_row.pack(fill='x', padx=14, pady=(0, 14))
+        
+        self.btn_copy_draft = create_action_btn(btn_row, "Copy Draft", self.copy_draft_to_clipboard, "primary", "small")
+        self.btn_copy_draft.pack(side='left', padx=(0, 6))
+        
+        self.btn_gen_pdf = create_action_btn(btn_row, "📄 Tailor Resume PDF", self.generate_pdf_action, "warning", "small")
+        self.btn_gen_pdf.pack(side='left', padx=(0, 6))
+        
+        self.btn_open_target = create_action_btn(btn_row, "Open URL", self.open_suggestion_link, "success", "small")
+        self.btn_open_target.pack(side='left', padx=(0, 6))
 
-        self.btn_mark_applied = tk.Button(btn_row, text="✓ Mark Done", font=('Segoe UI', 9, 'bold'), padx=15, pady=6)
-        self.btn_mark_applied.pack(side='left', padx=3)
-        self.btn_mark_applied.config(command=self.mark_suggestion_as_applied)
-        make_btn_interactive(self.btn_mark_applied, "#3b82f6", "#2563eb", "white", "white")
+        self.btn_mark_applied = create_action_btn(btn_row, "✓ Mark Done", self.mark_suggestion_as_applied, "outline", "small")
+        self.btn_mark_applied.pack(side='left')
         
         self.load_suggestions_table()
 
@@ -94,7 +106,7 @@ class SuggestionsView(ttk.Frame):
         company, role, detail = item[0], item[1], item[2]
         
         self.sug_preview.delete('1.0', 'end')
-        self.sug_preview.insert('end', "Generating customized email draft cover letter with local Qwen model...\n")
+        self.sug_preview.insert('end', "Generating customized email draft cover letter...\n")
         
         def update_ui(reply):
             self.sug_preview.delete('1.0', 'end')
@@ -194,3 +206,22 @@ Do not include any placeholders like [Date], write the letter ready to send.
         else:
             if detail.startswith("http"):
                 webbrowser.open(detail)
+
+    def generate_pdf_action(self):
+        selected = self.sug_tree.selection()
+        if not selected:
+            messagebox.showinfo("Select Job", "Please select a job suggestion from the list first.")
+            return
+        item = self.sug_tree.item(selected[0], 'values')
+        company, role = item[0], item[1]
+        
+        def bg_generate():
+            from core.resume_exporter import generate_tailored_resume_pdf
+            try:
+                pdf_path = generate_tailored_resume_pdf(role, company, "")
+                self.after(10, lambda: messagebox.showinfo("Resume PDF Created", f"Tailored PDF resume generated at:\n{pdf_path}"))
+                webbrowser.open(os.path.dirname(pdf_path))
+            except Exception as e:
+                self.after(10, lambda: messagebox.showerror("PDF Error", f"Could not generate PDF: {e}"))
+                
+        threading.Thread(target=bg_generate, daemon=True).start()

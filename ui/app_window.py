@@ -1,11 +1,13 @@
 import os
 import csv
 import json
+import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk
 import core.state as state
 from core.config_manager import CONFIG, CONFIG_PATH, get_model_name, get_active_model_display
 from core.db_manager import APPLIED_DB_PATH, recalculate_metrics
+from ui.components import C, F, configure_treeview_style
 from ui.dashboard_view import DashboardView
 from ui.history_view import HistoryView
 from ui.suggestions_view import SuggestionsView
@@ -13,71 +15,90 @@ from ui.approvals_view import ApprovalsView
 from ui.settings_view import SettingsView
 from ui.profile_view import ProfileView
 from ui.accounts_view import AccountsView
+from ui.contacts_view import ContactsView
 
-class AppWindow(tk.Tk):
+class AppWindow(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("AI Job Bot Desktop Assistant")
-        self.geometry("1150x760")
-        self.configure(bg="#0f172a")
+        self.title("JobPilot-AI — Autonomous Job Search & Outreach Assistant")
+        self.geometry("1220x800")
+        self.minsize(1050, 680)
+        self.configure(fg_color=C["bg"])
         
         self.current_view = "dashboard"
+        configure_treeview_style()
         
-        # Style definition
-        self.style = ttk.Style()
-        self.style.theme_use('clam')
-        
-        self.style.layout('Vertical.TScrollbar', [
-            ('Vertical.Scrollbar.trough', {'children': [
-                ('Vertical.Scrollbar.thumb', {'expand': '1', 'sticky': 'nswe'})
-            ], 'sticky': 'ns'})
-        ])
-        self.style.configure('Vertical.TScrollbar', troughcolor='#0f172a', background='#334155', bordercolor='#0f172a', arrowcolor='#94a3b8')
-        
-        self.style.configure('TFrame', background='#0f172a')
-        self.style.configure('Card.TFrame', background='#1e293b', borderwidth=1, relief='solid', bordercolor='#1f2937')
-        self.style.configure('Sidebar.TFrame', background='#0b0f19')
-        self.style.configure('TLabel', background='#0f172a', foreground='#f1f5f9', font=('Segoe UI', 10))
-        self.style.configure('Card.TLabel', background='#1e293b', foreground='#f1f5f9', font=('Segoe UI', 10))
-        self.style.configure('Heading.TLabel', background='#0f172a', foreground='#ffffff', font=('Segoe UI', 15, 'bold'))
-        self.style.configure('CardHeading.TLabel', background='#1e293b', foreground='#ffffff', font=('Segoe UI', 11, 'bold'))
-        
-        self.style.configure("Treeview", background="#0b0f19", foreground="#f1f5f9", fieldbackground="#0b0f19", rowheight=32, borderwidth=0, font=('Segoe UI', 9))
-        self.style.configure("Treeview.Heading", background="#1e293b", foreground="#ffffff", font=('Segoe UI', 9, 'bold'), relief='flat')
-        self.style.map("Treeview", background=[('selected', '#2563eb')])
-        
-        # Sidebar Frame
-        self.sidebar = ttk.Frame(self, style='Sidebar.TFrame', width=240)
+        # ── Sidebar ──
+        self.sidebar = ctk.CTkFrame(self, fg_color=C["sidebar"], corner_radius=0, width=240)
         self.sidebar.pack(side='left', fill='y')
         self.sidebar.pack_propagate(False)
         
-        header_f = tk.Frame(self.sidebar, bg="#0b0f19")
-        header_f.pack(pady=30, padx=20, anchor='w', fill='x')
-        logo_label = tk.Label(header_f, text="✦ Job AI Agent", bg="#0b0f19", fg="#3b82f6", font=('Segoe UI', 14, 'bold'))
-        logo_label.pack(side='left')
+        # Logo
+        logo_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        logo_frame.pack(pady=(24, 12), padx=20, anchor='w', fill='x')
         
-        # Navigation buttons
+        logo_icon = ctk.CTkLabel(logo_frame, text="◆", font=("Segoe UI", 20, "bold"), text_color=C["accent"])
+        logo_icon.pack(side='left')
+        logo_text = ctk.CTkLabel(logo_frame, text=" JobPilot-AI", font=F["logo"], text_color=C["text"])
+        logo_text.pack(side='left')
+        
+        # Separator
+        sep = ctk.CTkFrame(self.sidebar, fg_color=C["border"], height=1, corner_radius=0)
+        sep.pack(fill='x', padx=20, pady=(8, 16))
+        
+        # Navigation Buttons
+        nav_items = [
+            ('dashboard',   '⊞', 'Dashboard'),
+            ('history',     '☰', 'Applied History'),
+            ('suggestions', '✉', 'Suggestions'),
+            ('approvals',   '⚑', 'Approvals'),
+            ('contacts',    '📇', 'Recruiter Contacts'),
+            ('settings',    '⚙', 'AI & Search'),
+            ('profile',     '◉', 'My Profile'),
+            ('accounts',    '🔒', 'Credentials'),
+        ]
+        
         self.nav_btns = {}
-        for name in ['dashboard', 'history', 'suggestions', 'approvals', 'settings', 'profile', 'accounts']:
-            btn = tk.Button(self.sidebar, bg="#0b0f19", fg="#94a3b8", activebackground="#1e293b", activeforeground="#ffffff", font=('Segoe UI', 10, 'bold'), relief='flat', bd=0, anchor='w', padx=15, height=2, command=lambda n=name: self.show_view(n))
-            btn.pack(fill='x', padx=15, pady=2)
+        for name, icon, label in nav_items:
+            btn = ctk.CTkButton(
+                self.sidebar,
+                text=f"  {icon}   {label}",
+                anchor="w",
+                font=F["nav"],
+                fg_color="transparent",
+                hover_color=C["card_hover"],
+                text_color=C["muted"],
+                corner_radius=10,
+                height=42,
+                command=lambda n=name: self.show_view(n)
+            )
+            btn.pack(fill='x', padx=12, pady=2)
             self.nav_btns[name] = btn
             
-        self.status_var = tk.StringVar(value="Status: Idle")
-        status_lbl = tk.Label(self.sidebar, textvariable=self.status_var, bg="#0b0f19", fg="#10b981", font=('Segoe UI', 9, 'bold'))
-        status_lbl.pack(side='bottom', pady=20, padx=20, anchor='w')
+        # Status Card at Sidebar Bottom
+        status_card = ctk.CTkFrame(self.sidebar, fg_color=C["card"], corner_radius=12)
+        status_card.pack(side='bottom', fill='x', padx=16, pady=20)
         
-        self.container = ttk.Frame(self)
-        self.container.pack(side='right', fill='both', expand=True, padx=25, pady=25)
+        self.status_dot = ctk.CTkLabel(status_card, text="●", font=F["xs_b"], text_color=C["green"], width=16)
+        self.status_dot.pack(side='left', padx=(12, 0), pady=10)
+        
+        self.status_var = tk.StringVar(value="Status: Idle")
+        self.status_lbl = ctk.CTkLabel(status_card, textvariable=self.status_var, font=F["xs_b"], text_color=C["muted"], anchor="w")
+        self.status_lbl.pack(side='left', padx=(4, 12), pady=10)
+        
+        # ── Main Content Container ──
+        self.container = ctk.CTkFrame(self, fg_color="transparent")
+        self.container.pack(side='right', fill='both', expand=True, padx=(0, 20), pady=20)
         
         self.create_top_navbar()
         
-        # Instantiate views inside main window container
+        # Views
         self.views = {}
         self.views['dashboard'] = DashboardView(self.container, self)
         self.views['history'] = HistoryView(self.container, self)
         self.views['suggestions'] = SuggestionsView(self.container, self)
         self.views['approvals'] = ApprovalsView(self.container, self)
+        self.views['contacts'] = ContactsView(self.container, self)
         self.views['settings'] = SettingsView(self.container, self)
         self.views['profile'] = ProfileView(self.container, self)
         self.views['accounts'] = AccountsView(self.container, self)
@@ -86,23 +107,26 @@ class AppWindow(tk.Tk):
         self.update_gui_loop()
         
     def create_top_navbar(self):
-        self.top_bar = tk.Frame(self.container, bg="#1e293b", height=50, highlightthickness=1, highlightbackground="#1f2937")
-        self.top_bar.pack(fill='x', pady=(0, 20))
+        self.top_bar = ctk.CTkFrame(self.container, fg_color=C["card"], corner_radius=12, height=48)
+        self.top_bar.pack(fill='x', pady=(0, 16))
         self.top_bar.pack_propagate(False)
         
-        status_f = tk.Frame(self.top_bar, bg="#1e293b")
-        status_f.pack(side='left', padx=15, fill='y')
+        status_f = ctk.CTkFrame(self.top_bar, fg_color="transparent")
+        status_f.pack(side='left', padx=16, fill='y')
         
         active_disp = get_active_model_display()
-        self.ind_qwen = tk.Label(status_f, text=f"● {active_disp}: Ready", bg="#1e293b", fg="#10b981", font=('Segoe UI', 8, 'bold'), cursor="hand2")
-        self.ind_qwen.pack(side='left', padx=10)
+        self.ind_qwen = ctk.CTkLabel(status_f, text=f"● {active_disp}: Ready",
+                                    font=F["xs_b"], text_color=C["green"], cursor="hand2")
+        self.ind_qwen.pack(side='left', padx=(0, 16), pady=12)
         self.ind_qwen.bind("<Button-1>", lambda e: self.show_view('settings'))
         
-        self.ind_edge = tk.Label(status_f, text="● Edge Driver: Connected", bg="#1e293b", fg="#94a3b8", font=('Segoe UI', 8, 'bold'))
-        self.ind_edge.pack(side='left', padx=10)
+        self.ind_edge = ctk.CTkLabel(status_f, text="● Edge: Connected",
+                                    font=F["xs_b"], text_color=C["dim"])
+        self.ind_edge.pack(side='left', padx=(0, 16), pady=12)
         
-        self.ind_db = tk.Label(status_f, text="● Local DB: active", bg="#1e293b", fg="#3b82f6", font=('Segoe UI', 8, 'bold'))
-        self.ind_db.pack(side='left', padx=10)
+        self.ind_db = ctk.CTkLabel(status_f, text="● DB: Active",
+                                  font=F["xs_b"], text_color=C["blue"])
+        self.ind_db.pack(side='left', pady=12)
         
     def show_view(self, name):
         self.current_view = name
@@ -111,13 +135,14 @@ class AppWindow(tk.Tk):
         self.views[name].pack(fill='both', expand=True)
         self.refresh_nav_buttons()
         
-        # Trigger dynamic tree view reloads on focus
         if name == 'history':
             self.views['history'].load_history_table()
         elif name == 'suggestions':
             self.views['suggestions'].load_suggestions_table()
         elif name == 'approvals':
             self.views['approvals'].load_approvals_table()
+        elif name == 'contacts':
+            self.views['contacts'].load_contacts_table()
 
     def refresh_nav_buttons(self):
         doubt_count = len(state.DOUBT_QUEUE)
@@ -132,33 +157,36 @@ class AppWindow(tk.Tk):
                             sug_count += 1
             except Exception: pass
 
-        for name, btn in self.nav_btns.items():
-            if name == 'approvals' and doubt_count > 0:
-                text = f"Doubt Approvals  ● {doubt_count}"
-                fg_color = "#ef4444"
-                fg_hover = "#f87171"
-            elif name == 'suggestions' and sug_count > 0:
-                text = f"Job Suggestions  ● {sug_count}"
-                fg_color = "#3b82f6"
-                fg_hover = "#60a5fa"
-            else:
-                if name == 'dashboard': text = "Dashboard"
-                elif name == 'history': text = "Applied History"
-                elif name == 'suggestions': text = "Job Suggestions"
-                elif name == 'approvals': text = "Doubt Approvals"
-                elif name == 'settings': text = "Search Settings"
-                elif name == 'profile': text = "Candidate Profile"
-                elif name == 'accounts': text = "Logins & SMTP"
-                
-                fg_color = "#ffffff" if self.current_view == name else "#94a3b8"
-                fg_hover = "#ffffff"
+        nav_labels = {
+            'dashboard':   ('⊞', 'Dashboard'),
+            'history':     ('☰', 'Applied History'),
+            'suggestions': ('✉', 'Suggestions'),
+            'approvals':   ('⚑', 'Approvals'),
+            'contacts':    ('📇', 'Recruiter Contacts'),
+            'settings':    ('⚙', 'AI & Search'),
+            'profile':     ('◉', 'My Profile'),
+            'accounts':    ('🔒', 'Credentials'),
+        }
 
-            bg_color = "#1e293b" if self.current_view == name else "#0b0f19"
-            bg_hover = "#1e293b"
+        for name, btn in self.nav_btns.items():
+            is_active = self.current_view == name
+            icon, label = nav_labels[name]
             
-            btn.config(text=text, bg=bg_color, fg=fg_color)
-            btn.bind("<Enter>", lambda e, b=btn, bh=bg_hover, fh=fg_hover: b.config(bg=bh, fg=fh))
-            btn.bind("<Leave>", lambda e, b=btn, bc=bg_color, fc=fg_color: b.config(bg=bc, fg=fc))
+            if name == 'approvals' and doubt_count > 0:
+                text = f"  {icon}   Approvals  ● {doubt_count}"
+                fg_color = C["card_hover"] if is_active else "transparent"
+                text_color = C["red"]
+            elif name == 'suggestions' and sug_count > 0:
+                text = f"  {icon}   Suggestions  ● {sug_count}"
+                fg_color = C["card_hover"] if is_active else "transparent"
+                text_color = C["blue"]
+            else:
+                text = f"  {icon}   {label}"
+                fg_color = C["card_hover"] if is_active else "transparent"
+                text_color = C["text"] if is_active else C["muted"]
+
+            font = F["nav_a"] if is_active else F["nav"]
+            btn.configure(text=text, fg_color=fg_color, text_color=text_color, font=font)
 
     def execute_chat_command(self, cmd):
         c_type = cmd.get("type")
@@ -181,27 +209,26 @@ class AppWindow(tk.Tk):
     def reload_all_views(self):
         self.views['settings'].reload_view_data()
         self.views['profile'].reload_profile_fields()
-        
-        self.ind_qwen.config(text=f"● {get_active_model_display()}: Ready")
-        
+        self.ind_qwen.configure(text=f"● {get_active_model_display()}: Ready")
         recalculate_metrics()
         self.refresh_nav_buttons()
 
     def update_gui_loop(self):
         recalculate_metrics()
-        
-        # Dynamic dispatch refresh updates
         self.views['dashboard'].update_dashboard_data()
         
         if state.BOT_PAUSED:
             self.status_var.set("Status: Paused")
-            self.ind_edge.config(text="● Edge Driver: Paused", fg="#d97706")
+            self.status_dot.configure(text_color=C["amber"])
+            self.ind_edge.configure(text="● Edge: Paused", text_color=C["amber"])
         elif state.BOT_RUNNING:
             self.status_var.set(f"Status: {state.CURRENT_STATUS}")
-            self.ind_edge.config(text="● Edge Driver: Automated Loop Active", fg="#10b981")
+            self.status_dot.configure(text_color=C["green"])
+            self.ind_edge.configure(text="● Edge: Active", text_color=C["green"])
         else:
             self.status_var.set("Status: Idle")
-            self.ind_edge.config(text="● Edge Driver: Connected (Idle)", fg="#94a3b8")
+            self.status_dot.configure(text_color=C["dim"])
+            self.ind_edge.configure(text="● Edge: Idle", text_color=C["dim"])
             
         self.refresh_nav_buttons()
         self.after(1000, self.update_gui_loop)

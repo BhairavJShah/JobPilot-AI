@@ -103,7 +103,11 @@ def query_cloud_ai(prompt):
                     parts = res["candidates"][0].get("content", {}).get("parts", [])
                     if parts:
                         return parts[0].get("text", "").strip()
-                        
+                # Parse Anthropic style content list
+                elif "content" in res and isinstance(res["content"], list) and len(res["content"]) > 0:
+                    first_item = res["content"][0]
+                    if isinstance(first_item, dict) and "text" in first_item:
+                        return first_item["text"].strip()
                 return json.dumps(res)
         except Exception as e:
             if attempt < MAX_RETRIES:

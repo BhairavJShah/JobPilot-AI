@@ -36,7 +36,17 @@ DEFAULT_CONFIG = {
         "github": "https://github.com/your-username",
         "portfolio": "https://yourportfolio.com",
         "resume_path": "",
-        "skills": ["React", "Node.js", "Python", "JavaScript", "Git"]
+        "skills": ["React", "Node.js", "Python", "JavaScript", "Git"],
+        "qa_vault": {
+            "experience_years": "1",
+            "notice_period": "Immediate",
+            "current_ctc": "0",
+            "expected_ctc": "Negotiable",
+            "work_authorization": "Yes",
+            "require_sponsorship": "No",
+            "willing_to_relocate": "Yes",
+            "gender": "Decline to state"
+        }
     },
     "settings": {
         "queries": ["Full Stack Developer", "Software Engineer", "Frontend Developer"],
@@ -57,7 +67,11 @@ DEFAULT_CONFIG = {
         "cloud_ai_auth_type": "api_key",
         "cloud_ai_api_key": "",
         "cloud_ai_username": "",
-        "cloud_ai_password": ""
+        "cloud_ai_password": "",
+        "safe_mode": True,
+        "daily_apply_cap": 25,
+        "min_delay_seconds": 15,
+        "max_delay_seconds": 45
     },
     "accounts": {
         "indeed_email": "",

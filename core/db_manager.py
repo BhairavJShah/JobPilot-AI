@@ -5,7 +5,54 @@ import core.state as state
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APPLIED_DB_PATH = os.path.join(BASE_DIR, "applied_jobs.csv")
+RECRUITER_DB_PATH = os.path.join(BASE_DIR, "recruiter_contacts.csv")
 LOG_FILE_PATH = os.path.join(BASE_DIR, "bot_logs.txt")
+
+def save_recruiter_contact(company, role, recruiter_name, email, phone, platform, url):
+    """Save extracted recruiter contact details to recruiter_contacts.csv."""
+    if not (email or phone or recruiter_name):
+        return
+    file_exists = os.path.exists(RECRUITER_DB_PATH)
+    try:
+        # Check if email/phone already saved for this company/role
+        existing_contacts = load_recruiter_contacts()
+        for c in existing_contacts:
+            if c.get("url") == url or (c.get("company") == company and c.get("email") == email and email != ""):
+                return  # Avoid duplicate entries
+                
+        with open(RECRUITER_DB_PATH, mode='a', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(["Company", "Role", "Recruiter_Name", "Email", "Phone", "Platform", "URL", "Timestamp"])
+            writer.writerow([company, role, recruiter_name, email, phone, platform, url, datetime.now().isoformat()])
+        log_message(f"📇 RECRUITER CONTACT FOUND: {company} ({role}) -> Email: '{email}', Phone: '{phone}'")
+    except Exception as e:
+        log_message(f"Error saving recruiter contact: {e}")
+
+def load_recruiter_contacts():
+    """Load all recruiter contacts from CSV database."""
+    if not os.path.exists(RECRUITER_DB_PATH):
+        return []
+    contacts = []
+    try:
+        with open(RECRUITER_DB_PATH, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader, None)
+            for row in reader:
+                if row and len(row) >= 7:
+                    contacts.append({
+                        "company": row[0],
+                        "role": row[1],
+                        "recruiter_name": row[2],
+                        "email": row[3],
+                        "phone": row[4],
+                        "platform": row[5],
+                        "url": row[6],
+                        "timestamp": row[7] if len(row) > 7 else ""
+                    })
+    except Exception as e:
+        log_message(f"Error loading recruiter contacts: {e}")
+    return contacts
 
 # Shared in-memory set of applied URLs, updated live to prevent duplicates across concurrent loops
 APPLIED_URLS_SET = set()

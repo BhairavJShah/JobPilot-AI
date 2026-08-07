@@ -1,58 +1,75 @@
 import json
+import customtkinter as ctk
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
 from core.config_manager import CONFIG, CONFIG_PATH
 from core.db_manager import log_message, recalculate_metrics
-from ui.components import TagChipContainer, add_grid_input, make_btn_interactive, enable_canvas_mousewheel
+from ui.components import C, F, TagChipContainer, add_grid_input, create_action_btn, add_section_divider
 
-class ProfileView(ttk.Frame):
+class ProfileView(ctk.CTkFrame):
     def __init__(self, parent, controller):
-        super().__init__(parent)
+        super().__init__(parent, fg_color="transparent")
         self.controller = controller
         
-        lbl_title = ttk.Label(self, text="Candidate Profile details", style='Heading.TLabel')
-        lbl_title.pack(anchor='w', pady=(0, 20))
+        # ── Header ──
+        lbl_title = ctk.CTkLabel(self, text="Candidate Profile", font=F["h1"], text_color=C["text"], anchor="w")
+        lbl_title.pack(anchor='w', pady=(0, 14))
         
-        canvas = tk.Canvas(self, bg="#0f172a", bd=0, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
+        # ── Scrollable Card ──
+        card = ctk.CTkScrollableFrame(self, fg_color=C["card"], corner_radius=12)
+        card.pack(fill='both', expand=True)
         
-        canvas_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
+        # ── Personal Information ──
+        add_section_divider(card, "Personal Information")
         
-        canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas_window, width=e.width))
-        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        
-        card = ttk.Frame(scrollable_frame, style='Card.TFrame', padding=20)
-        card.pack(fill='both', expand=True, padx=5, pady=5)
-        
-        grid_frame = ttk.Frame(card)
-        grid_frame.pack(fill='x', pady=10)
+        grid_frame = ctk.CTkFrame(card, fg_color="transparent")
+        grid_frame.pack(fill='x', padx=16, pady=4)
         grid_frame.columnconfigure((0, 1), weight=1, uniform="equal")
         
         self.prof_name = add_grid_input(grid_frame, "Full Name", 0, 0)
         self.prof_email = add_grid_input(grid_frame, "Email Address", 0, 1)
         self.prof_phone = add_grid_input(grid_frame, "Phone Number", 1, 0)
         self.prof_country = add_grid_input(grid_frame, "Country Code", 1, 1)
-        self.prof_linkedin = add_grid_input(grid_frame, "LinkedIn URL", 2, 0)
-        self.prof_github = add_grid_input(grid_frame, "GitHub URL", 2, 1)
-        self.prof_portfolio = add_grid_input(grid_frame, "Portfolio Website", 3, 0)
-        self.prof_resume = add_grid_input(grid_frame, "Resume Local Path (PDF)", 3, 1)
         
-        self.prof_skills = TagChipContainer(card, CONFIG["candidate"].get("skills", []), "Technical Skills Chip Badges (Press Enter or Comma to add)", lambda val: self.update_candidate_list("skills", val))
-        self.prof_skills.pack(fill='x', pady=10)
+        # ── Online Presence ──
+        add_section_divider(card, "Online Presence")
+        
+        grid_frame2 = ctk.CTkFrame(card, fg_color="transparent")
+        grid_frame2.pack(fill='x', padx=16, pady=4)
+        grid_frame2.columnconfigure((0, 1), weight=1, uniform="equal")
+        
+        self.prof_linkedin = add_grid_input(grid_frame2, "LinkedIn URL", 0, 0)
+        self.prof_github = add_grid_input(grid_frame2, "GitHub URL", 0, 1)
+        self.prof_portfolio = add_grid_input(grid_frame2, "Portfolio Website", 1, 0)
+        self.prof_resume = add_grid_input(grid_frame2, "Resume Local Path (PDF)", 1, 1)
+        
+        # ── Candidate QA Vault (ATS Form Memory) ──
+        add_section_divider(card, "Candidate QA Vault (Smart Form Memory)")
+        
+        grid_qa = ctk.CTkFrame(card, fg_color="transparent")
+        grid_qa.pack(fill='x', padx=16, pady=4)
+        grid_qa.columnconfigure((0, 1), weight=1, uniform="equal")
+        
+        self.qa_exp = add_grid_input(grid_qa, "Experience (Years)", 0, 0)
+        self.qa_notice = add_grid_input(grid_qa, "Notice Period", 0, 1)
+        self.qa_cctc = add_grid_input(grid_qa, "Current Salary / CTC", 1, 0)
+        self.qa_ectc = add_grid_input(grid_qa, "Expected Salary / CTC", 1, 1)
+        self.qa_auth = add_grid_input(grid_qa, "Authorized to Work? (Yes/No)", 2, 0)
+        self.qa_reloc = add_grid_input(grid_qa, "Willing to Relocate? (Yes/No)", 2, 1)
+        
+        # ── Technical Skills ──
+        add_section_divider(card, "Technical Skills")
+        
+        self.prof_skills = TagChipContainer(card, CONFIG["candidate"].get("skills", []), "Skill Badges (Press Enter or Comma to add)", lambda val: self.update_candidate_list("skills", val))
+        self.prof_skills.pack(fill='x', pady=6)
         
         self.reload_profile_fields()
         
-        btn_save = tk.Button(card, text="Save Profile Details", font=('Segoe UI', 10, 'bold'), padx=25, pady=8)
-        btn_save.pack(anchor='w', pady=(25, 0))
-        btn_save.config(command=self.save_profile_action)
-        make_btn_interactive(btn_save, "#2563eb", "#1d4ed8", "white", "white")
-
-        enable_canvas_mousewheel(canvas)
+        # ── Save Button ──
+        btn_frame = ctk.CTkFrame(card, fg_color="transparent")
+        btn_frame.pack(anchor='w', padx=16, pady=(20, 16))
+        btn_save = create_action_btn(btn_frame, "Save Profile", self.save_profile_action, "primary", "large")
+        btn_save.pack(side='left')
 
     def update_candidate_list(self, key, val):
         CONFIG["candidate"][key] = val
@@ -78,6 +95,15 @@ class ProfileView(ttk.Frame):
         self.prof_portfolio.insert(0, CONFIG["candidate"]["portfolio"])
         self.prof_resume.delete(0, 'end')
         self.prof_resume.insert(0, CONFIG["candidate"]["resume_path"])
+        
+        qa = CONFIG["candidate"].get("qa_vault", {})
+        self.qa_exp.delete(0, 'end'); self.qa_exp.insert(0, qa.get("experience_years", "1"))
+        self.qa_notice.delete(0, 'end'); self.qa_notice.insert(0, qa.get("notice_period", "Immediate"))
+        self.qa_cctc.delete(0, 'end'); self.qa_cctc.insert(0, qa.get("current_ctc", "0"))
+        self.qa_ectc.delete(0, 'end'); self.qa_ectc.insert(0, qa.get("expected_ctc", "Negotiable"))
+        self.qa_auth.delete(0, 'end'); self.qa_auth.insert(0, qa.get("work_authorization", "Yes"))
+        self.qa_reloc.delete(0, 'end'); self.qa_reloc.insert(0, qa.get("willing_to_relocate", "Yes"))
+        
         self.prof_skills.update_items(CONFIG["candidate"].get("skills", []))
 
     def save_profile_action(self):
@@ -91,10 +117,18 @@ class ProfileView(ttk.Frame):
             CONFIG["candidate"]["portfolio"] = self.prof_portfolio.get().strip()
             CONFIG["candidate"]["resume_path"] = self.prof_resume.get().strip()
             
+            if "qa_vault" not in CONFIG["candidate"]: CONFIG["candidate"]["qa_vault"] = {}
+            CONFIG["candidate"]["qa_vault"]["experience_years"] = self.qa_exp.get().strip()
+            CONFIG["candidate"]["qa_vault"]["notice_period"] = self.qa_notice.get().strip()
+            CONFIG["candidate"]["qa_vault"]["current_ctc"] = self.qa_cctc.get().strip()
+            CONFIG["candidate"]["qa_vault"]["expected_ctc"] = self.qa_ectc.get().strip()
+            CONFIG["candidate"]["qa_vault"]["work_authorization"] = self.qa_auth.get().strip()
+            CONFIG["candidate"]["qa_vault"]["willing_to_relocate"] = self.qa_reloc.get().strip()
+            
             with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
                 json.dump(CONFIG, f, indent=4)
-            messagebox.showinfo("Success", "Candidate profile updated successfully!")
-            log_message("Candidate Profile saved via Desktop GUI.")
+            messagebox.showinfo("Success", "Candidate profile & ATS QA Vault updated successfully!")
+            log_message("Candidate Profile & QA Vault saved via Desktop GUI.")
             recalculate_metrics()
             self.controller.refresh_nav_buttons()
         except Exception as e:

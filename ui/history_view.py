@@ -2,42 +2,42 @@ import os
 import csv
 import shutil
 from datetime import datetime
+import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk, messagebox
 from core.db_manager import APPLIED_DB_PATH, log_message
 from automation.status_tracker import start_tracker_thread
-from ui.components import make_btn_interactive
+from ui.components import C, F, create_action_btn
 
-class HistoryView(ttk.Frame):
+class HistoryView(ctk.CTkFrame):
     def __init__(self, parent, controller):
-        super().__init__(parent)
+        super().__init__(parent, fg_color="transparent")
         self.controller = controller
         
-        title_row = ttk.Frame(self)
-        title_row.pack(fill='x', pady=(0, 20))
-        lbl_title = ttk.Label(title_row, text="Application History", style='Heading.TLabel')
+        # ── Header Row ──
+        title_row = ctk.CTkFrame(self, fg_color="transparent")
+        title_row.pack(fill='x', pady=(0, 14))
+        lbl_title = ctk.CTkLabel(title_row, text="Application History", font=F["h1"], text_color=C["text"])
         lbl_title.pack(side='left')
         
-        btn_export = tk.Button(title_row, text="Export CSV", font=('Segoe UI', 9, 'bold'), padx=15, pady=5)
-        btn_export.pack(side='right', padx=5)
-        btn_export.config(command=self.export_csv)
-        make_btn_interactive(btn_export, "#10b981", "#059669", "white", "white")
+        btn_frame = ctk.CTkFrame(title_row, fg_color="transparent")
+        btn_frame.pack(side='right')
         
-        btn_scan = tk.Button(title_row, text="Scan & Update Statuses", font=('Segoe UI', 9, 'bold'), padx=15, pady=5)
-        btn_scan.pack(side='right', padx=5)
-        btn_scan.config(command=start_tracker_thread)
-        make_btn_interactive(btn_scan, "#3b82f6", "#2563eb", "white", "white")
+        btn_export = create_action_btn(btn_frame, "Export CSV", self.export_csv, "success", "small")
+        btn_export.pack(side='right', padx=(8, 0))
+        
+        btn_scan = create_action_btn(btn_frame, "Scan Statuses", start_tracker_thread, "primary", "small")
+        btn_scan.pack(side='right', padx=(8, 0))
 
-        btn_refresh = tk.Button(title_row, text="Refresh Table", font=('Segoe UI', 9, 'bold'), padx=15, pady=5)
-        btn_refresh.pack(side='right', padx=5)
-        btn_refresh.config(command=self.load_history_table)
-        make_btn_interactive(btn_refresh, "#1e293b", "#334155", "white", "white")
+        btn_refresh = create_action_btn(btn_frame, "Refresh", self.load_history_table, "ghost", "small")
+        btn_refresh.pack(side='right')
         
-        card = ttk.Frame(self, style='Card.TFrame', padding=1)
+        # ── Table Card ──
+        card = ctk.CTkFrame(self, fg_color=C["card"], corner_radius=12)
         card.pack(fill='both', expand=True)
         
         columns = ('company', 'role', 'platform', 'status', 'detail', 'date')
-        self.tree = ttk.Treeview(card, columns=columns, show='headings')
+        self.tree = ttk.Treeview(card, columns=columns, show='headings', style="Dark.Treeview")
         self.tree.heading('company', text='Company')
         self.tree.heading('role', text='Role')
         self.tree.heading('platform', text='Platform')
@@ -52,11 +52,11 @@ class HistoryView(ttk.Frame):
         self.tree.column('detail', width=220)
         self.tree.column('date', width=120)
         
-        scrollbar = ttk.Scrollbar(card, orient="vertical", command=self.tree.yview)
+        scrollbar = ttk.Scrollbar(card, orient="vertical", command=self.tree.yview, style="Dark.Vertical.TScrollbar")
         self.tree.configure(yscrollcommand=scrollbar.set)
         
-        self.tree.pack(side='left', fill='both', expand=True)
-        scrollbar.pack(side='right', fill='y')
+        self.tree.pack(side='left', fill='both', expand=True, padx=12, pady=12)
+        scrollbar.pack(side='right', fill='y', pady=12, padx=(0, 6))
         
         self.load_history_table()
 
@@ -71,9 +71,9 @@ class HistoryView(ttk.Frame):
         
         try:
             shutil.copy2(APPLIED_DB_PATH, export_path)
-            messagebox.showinfo("Export Successful", f"History exported to:\\n{export_path}")
+            messagebox.showinfo("Export Successful", f"History exported to:\n{export_path}")
         except Exception as e:
-            messagebox.showerror("Export Failed", f"Could not export CSV:\\n{e}")
+            messagebox.showerror("Export Failed", f"Could not export CSV:\n{e}")
 
     def load_history_table(self):
         for item in self.tree.get_children():
@@ -96,4 +96,3 @@ class HistoryView(ttk.Frame):
                 self.tree.insert('', 'end', values=r)
         except Exception as e:
             log_message(f"History load error: {e}")
-

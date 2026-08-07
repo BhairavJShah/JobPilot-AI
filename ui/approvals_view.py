@@ -1,31 +1,34 @@
+import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 import core.state as state
-from core.db_manager import save_to_db, recalculate_metrics
+from core.db_manager import save_to_db, recalculate_metrics, update_job_status_in_csv
 from automation.bot_runner import apply_single_job_async
-from ui.components import make_btn_interactive
+from ui.components import C, F, create_action_btn
 
-class ApprovalsView(ttk.Frame):
+class ApprovalsView(ctk.CTkFrame):
     def __init__(self, parent, controller):
-        super().__init__(parent)
+        super().__init__(parent, fg_color="transparent")
         self.controller = controller
         
-        title_row = ttk.Frame(self)
-        title_row.pack(fill='x', pady=(0, 20))
-        lbl_title = ttk.Label(title_row, text="Doubt Queue Approvals", style='Heading.TLabel')
+        # ── Header ──
+        title_row = ctk.CTkFrame(self, fg_color="transparent")
+        title_row.pack(fill='x', pady=(0, 14))
+        lbl_title = ctk.CTkLabel(title_row, text="Doubt Queue Approvals", font=F["h1"], text_color=C["text"])
         lbl_title.pack(side='left')
         
-        card_split = ttk.Frame(self)
+        # ── Split Layout ──
+        card_split = ctk.CTkFrame(self, fg_color="transparent")
         card_split.pack(fill='both', expand=True)
         card_split.columnconfigure(0, weight=1)
         card_split.columnconfigure(1, weight=1)
         card_split.rowconfigure(0, weight=1)
         
-        left_card = ttk.Frame(card_split, style='Card.TFrame', padding=10)
-        left_card.grid(row=0, column=0, sticky='nsew', padx=(0, 10))
+        left_card = ctk.CTkFrame(card_split, fg_color=C["card"], corner_radius=12)
+        left_card.grid(row=0, column=0, sticky='nsew', padx=(0, 8))
         
         columns = ('company', 'role', 'score')
-        self.appr_tree = ttk.Treeview(left_card, columns=columns, show='headings')
+        self.appr_tree = ttk.Treeview(left_card, columns=columns, show='headings', style="Dark.Treeview")
         self.appr_tree.heading('company', text='Company')
         self.appr_tree.heading('role', text='Role')
         self.appr_tree.heading('score', text='Score')
@@ -34,29 +37,30 @@ class ApprovalsView(ttk.Frame):
         self.appr_tree.column('score', width=70)
         
         self.appr_tree.bind("<<TreeviewSelect>>", self.on_approval_select)
-        self.appr_tree.pack(fill='both', expand=True)
+        self.appr_tree.pack(fill='both', expand=True, padx=10, pady=10)
         
-        right_card = ttk.Frame(card_split, style='Card.TFrame', padding=15)
-        right_card.grid(row=0, column=1, sticky='nsew', padx=(10, 0))
+        right_card = ctk.CTkFrame(card_split, fg_color=C["card"], corner_radius=12)
+        right_card.grid(row=0, column=1, sticky='nsew', padx=(8, 0))
         
-        lbl_detail_lbl = ttk.Label(right_card, text="Job Details Preview", style='CardHeading.TLabel')
-        lbl_detail_lbl.pack(anchor='w', pady=(0, 10))
+        lbl_detail_lbl = ctk.CTkLabel(right_card, text="Job Details Preview", font=F["h3"], text_color=C["text"])
+        lbl_detail_lbl.pack(anchor='w', padx=14, pady=(12, 8))
         
-        self.appr_desc = scrolledtext.ScrolledText(right_card, bg="#080c14", fg="#cbd5e1", font=('Segoe UI', 9), wrap='word', bd=0)
-        self.appr_desc.pack(fill='both', expand=True, pady=(0, 10))
+        desc_inner = ctk.CTkFrame(right_card, fg_color=C["input"], corner_radius=8)
+        desc_inner.pack(fill='both', expand=True, padx=14, pady=(0, 10))
         
-        btn_row = ttk.Frame(right_card)
-        btn_row.pack(fill='x')
+        self.appr_desc = scrolledtext.ScrolledText(desc_inner,
+            bg=C["input"], fg=C["text"],
+            font=F["sm"], wrap='word', bd=0, highlightthickness=0)
+        self.appr_desc.pack(fill='both', expand=True, padx=6, pady=6)
         
-        btn_appr = tk.Button(btn_row, text="Approve & Apply", font=('Segoe UI', 9, 'bold'), padx=20, pady=7)
-        btn_appr.pack(side='left', padx=5)
-        btn_appr.config(command=self.approve_and_apply_job)
-        make_btn_interactive(btn_appr, "#10b981", "#059669", "white", "white")
+        btn_row = ctk.CTkFrame(right_card, fg_color="transparent")
+        btn_row.pack(fill='x', padx=14, pady=(0, 14))
         
-        btn_rej = tk.Button(btn_row, text="Reject & Skip", font=('Segoe UI', 9, 'bold'), padx=20, pady=7)
-        btn_rej.pack(side='left', padx=5)
-        btn_rej.config(command=self.reject_and_skip_job)
-        make_btn_interactive(btn_rej, "#ef4444", "#dc2626", "white", "white")
+        btn_appr = create_action_btn(btn_row, "✓  Approve & Apply", self.approve_and_apply_job, "success", "normal")
+        btn_appr.pack(side='left', padx=(0, 8))
+        
+        btn_rej = create_action_btn(btn_row, "✕  Reject & Skip", self.reject_and_skip_job, "danger", "normal")
+        btn_rej.pack(side='left')
         
         self.load_approvals_table()
 
@@ -120,9 +124,12 @@ class ApprovalsView(ttk.Frame):
                     
         if not job: return
         
-        save_to_db(job.get("url", ""), job.get("title", ""), job.get("company", ""), job.get("platform", ""), "Manual User Disapproval", "Manual User Disapproval")
+        updated = update_job_status_in_csv(job.get("url", ""), "Approval Needed", "Manual User Disapproval", "Manual User Disapproval")
+        if not updated:
+            save_to_db(job.get("url", ""), job.get("title", ""), job.get("company", ""), job.get("platform", ""), "Manual User Disapproval", "Manual User Disapproval")
+            
         self.load_approvals_table()
         self.appr_desc.delete('1.0', 'end')
-        messagebox.showinfo("Skipped", "Job rejected and removed from queue.")
+        messagebox.showinfo("Skipped", "Job rejected and marked as Manual User Disapproval.")
         recalculate_metrics()
         self.controller.refresh_nav_buttons()

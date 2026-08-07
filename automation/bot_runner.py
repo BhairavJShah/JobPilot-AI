@@ -7,7 +7,8 @@ import urllib.parse
 from playwright.async_api import async_playwright
 import core.state as state
 from core.config_manager import CONFIG, get_location_search_term, encode_query_for_url, SCREENSHOTS_DIR
-from core.db_manager import log_message, save_to_db, load_applied_urls, recalculate_metrics, APPLIED_URLS_SET, init_applied_urls
+from core.db_manager import log_message, save_to_db, load_applied_urls, recalculate_metrics, APPLIED_URLS_SET, init_applied_urls, update_job_status_in_csv, save_recruiter_contact
+from core.contact_extractor import extract_recruiter_contacts
 from automation.llm_evaluator import evaluate_job_with_qwen
 from automation.form_autofiller import auto_fill_playwright_form
 
@@ -15,6 +16,24 @@ from automation.form_autofiller import auto_fill_playwright_form
 async def check_pause():
     while state.BOT_PAUSED and state.BOT_RUNNING:
         await asyncio.sleep(1)
+
+async def check_safety_limit():
+    safe_mode = CONFIG.get("settings", {}).get("safe_mode", True)
+    daily_cap = CONFIG.get("settings", {}).get("daily_apply_cap", 25)
+    applied_count = state.METRICS.get("applied", 0)
+    
+    if safe_mode and applied_count >= daily_cap:
+        log_message(f"🛡️ SAFETY LIMIT REACHED: Reached daily application cap ({applied_count}/{daily_cap}). Pausing bot to protect your platform account.")
+        state.BOT_PAUSED = True
+        return True
+    return False
+
+async def human_delay():
+    min_d = CONFIG.get("settings", {}).get("min_delay_seconds", 10)
+    max_d = CONFIG.get("settings", {}).get("max_delay_seconds", 30)
+    delay = random.randint(min_d, max_d)
+    log_message(f"⏳ Human Emulation: Pausing {delay}s to simulate realistic human browsing...")
+    await asyncio.sleep(delay)
 
 # Retry logic for page.goto
 async def goto_with_retry(page, url, retries=2, delay=3, wait_until="domcontentloaded", timeout=30000):
@@ -180,7 +199,18 @@ async def process_job_evaluation(title, company, href, desc_text, platform, desc
     DB save, and screenshot pattern.
     Returns True if applied/suggested, False if skipped.
     """
-    email_matches = re.findall(r'[\w\.-]+@[\w\.-]+\.\w+', desc_text)
+    contacts = extract_recruiter_contacts(desc_text)
+    email_matches = contacts["emails"]
+    phone_matches = contacts["phones"]
+    hr_matches = contacts["hr_names"]
+    
+    # Save recruiter contact to dedicated DB if any info found
+    if email_matches or phone_matches or hr_matches:
+        e_str = email_matches[0] if email_matches else ""
+        p_str = phone_matches[0] if phone_matches else ""
+        hr_str = hr_matches[0] if hr_matches else "Hiring Manager"
+        save_recruiter_contact(company, title, hr_str, e_str, p_str, platform, href)
+        
     eval_res = evaluate_job_with_qwen(title, desc_text)
     score = eval_res.get("score", 0)
     is_match = eval_res.get("is_match", False)
@@ -773,8 +803,9 @@ def apply_single_job_async(job):
                 await auto_fill_playwright_form(page)
             except Exception as e:
                 log_message(f"Auto-fill error: {e}")
-            await wait_for_manual_submission(page)
-            save_to_db(job["url"], job["title"], job["company"], platform, "Applied", "Manual Approval Apply")
+            updated = update_job_status_in_csv(job["url"], "Approval Needed", "Applied", "Manual Approval Apply")
+            if not updated:
+                save_to_db(job["url"], job["title"], job["company"], platform, "Applied", "Manual Approval Apply")
         else:
             log_message("Apply button not found on page. Please apply manually in the opened tab.")
             await asyncio.sleep(30)

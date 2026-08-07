@@ -3,6 +3,7 @@ import csv
 import json
 import re
 import threading
+import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk, scrolledtext
 import core.state as state
@@ -11,129 +12,150 @@ from core.db_manager import log_message, recalculate_metrics, APPLIED_DB_PATH
 from core.resume_parser import extract_resume_text
 from automation.llm_evaluator import query_local_qwen
 from automation.bot_runner import start_bot_thread, stop_bot
-from ui.components import make_btn_interactive
+from ui.components import C, F, create_action_btn
 
-class DashboardView(ttk.Frame):
+class DashboardView(ctk.CTkFrame):
     def __init__(self, parent, controller):
-        super().__init__(parent)
+        super().__init__(parent, fg_color="transparent")
         self.controller = controller
         
-        title_row = ttk.Frame(self)
-        title_row.pack(fill='x', pady=(0, 15))
-        lbl_title = ttk.Label(title_row, text="Control Dashboard", style='Heading.TLabel')
+        # ── Header Row ──
+        title_row = ctk.CTkFrame(self, fg_color="transparent")
+        title_row.pack(fill='x', pady=(0, 14))
+        lbl_title = ctk.CTkLabel(title_row, text="Control Dashboard", font=F["h1"], text_color=C["text"])
         lbl_title.pack(side='left')
         
-        self.btn_toggle = tk.Button(title_row, text="Start Bot", font=('Segoe UI', 10, 'bold'), padx=20, pady=6)
+        btn_frame = ctk.CTkFrame(title_row, fg_color="transparent")
+        btn_frame.pack(side='right')
+        
+        self.btn_pause = create_action_btn(btn_frame, "⏸  Pause", self.toggle_pause_action, "warning", "normal")
+        self.btn_pause.pack(side='right', padx=(8, 0))
+        
+        self.btn_toggle = create_action_btn(btn_frame, "▶  Start Bot", self.toggle_bot_action, "primary", "normal")
         self.btn_toggle.pack(side='right')
-        self.btn_toggle.config(command=self.toggle_bot_action)
-        make_btn_interactive(self.btn_toggle, "#2563eb", "#1d4ed8", "white", "white")
         
-        self.btn_pause = tk.Button(title_row, text="Pause", font=('Segoe UI', 10, 'bold'), padx=20, pady=6)
-        self.btn_pause.pack(side='right', padx=5)
-        self.btn_pause.config(command=self.toggle_pause_action)
-        make_btn_interactive(self.btn_pause, "#d97706", "#b45309", "white", "white")
-        
-        metrics_frame = ttk.Frame(self)
-        metrics_frame.pack(fill='x', pady=(0, 5))
+        # ── Metric Cards Row ──
+        metrics_frame = ctk.CTkFrame(self, fg_color="transparent")
+        metrics_frame.pack(fill='x', pady=(0, 6))
         metrics_frame.columnconfigure((0, 1, 2, 3), weight=1, uniform="equal")
         
-        self.applied_metric = self.create_metric_card(metrics_frame, "Applications Sent", "0", 0)
-        self.skipped_metric = self.create_metric_card(metrics_frame, "Jobs Skipped", "0", 1)
-        self.total_metric = self.create_metric_card(metrics_frame, "Total Evaluated", "0", 2)
-        self.success_metric = self.create_metric_card(metrics_frame, "Success Rate", "0%", 3)
+        self.applied_metric = self.create_metric_card(metrics_frame, "Applications Sent", "0", 0, C["green"])
+        self.skipped_metric = self.create_metric_card(metrics_frame, "Jobs Skipped", "0", 1, C["red"])
+        self.total_metric = self.create_metric_card(metrics_frame, "Total Evaluated", "0", 2, C["blue"])
+        self.success_metric = self.create_metric_card(metrics_frame, "Success Rate", "0%", 3, C["purple"])
         
-        self.session_stats_lbl = ttk.Label(self, text="Today: 0 evaluated, 0 matches", foreground="#94a3b8", font=('Segoe UI', 9))
-        self.session_stats_lbl.pack(anchor='w', pady=(0, 15))
+        self.session_stats_lbl = ctk.CTkLabel(self, text="Today: 0 evaluated, 0 matches",
+                                              text_color=C["dim"], font=F["xs_b"], anchor="w")
+        self.session_stats_lbl.pack(anchor='w', pady=(0, 12))
         
-        workspace_frame = ttk.Frame(self)
+        # ── Workspace 2x2 Grid ──
+        workspace_frame = ctk.CTkFrame(self, fg_color="transparent")
         workspace_frame.pack(fill='both', expand=True)
         workspace_frame.columnconfigure(0, weight=1)
         workspace_frame.columnconfigure(1, weight=1)
         workspace_frame.rowconfigure(0, weight=1)
         workspace_frame.rowconfigure(1, weight=1)
         
-        # Logs Card
-        logs_card = ttk.Frame(workspace_frame, style='Card.TFrame', padding=15)
-        logs_card.grid(row=0, column=0, sticky='nsew', padx=(0, 10), pady=(0, 10))
+        # ── Logs Card ──
+        logs_card = ctk.CTkFrame(workspace_frame, fg_color=C["card"], corner_radius=12)
+        logs_card.grid(row=0, column=0, sticky='nsew', padx=(0, 8), pady=(0, 8))
         
-        log_top = ttk.Frame(logs_card)
-        log_top.pack(fill='x', pady=(0, 5))
-        lbl_log_title = ttk.Label(log_top, text="Operation Logs", style='CardHeading.TLabel')
+        log_top = ctk.CTkFrame(logs_card, fg_color="transparent")
+        log_top.pack(fill='x', padx=14, pady=(12, 6))
+        lbl_log_title = ctk.CTkLabel(log_top, text="Operation Logs", font=F["h3"], text_color=C["text"])
         lbl_log_title.pack(side='left')
         
         self.log_search_var = tk.StringVar()
-        log_search = tk.Entry(log_top, textvariable=self.log_search_var, bg="#080c14", fg="white", insertbackground="white", bd=0, highlightthickness=1, highlightbackground="#1f2937", font=('Segoe UI', 9), width=20)
+        log_search = ctk.CTkEntry(log_top, textvariable=self.log_search_var,
+                                 placeholder_text="Search logs...",
+                                 fg_color=C["input"], border_color=C["border"],
+                                 text_color=C["text"], font=F["xs"], width=180, height=30, corner_radius=8)
         log_search.pack(side='right')
         
-        self.logs_box = scrolledtext.ScrolledText(logs_card, bg="#080c14", fg="#38bdf8", insertbackground="white", font=('Courier New', 9), bd=0, highlightthickness=1, highlightbackground="#1f2937")
-        self.logs_box.pack(fill='both', expand=True)
+        logs_inner = ctk.CTkFrame(logs_card, fg_color=C["input"], corner_radius=8)
+        logs_inner.pack(fill='both', expand=True, padx=14, pady=(0, 14))
+        
+        self.logs_box = scrolledtext.ScrolledText(logs_inner,
+            bg=C["input"], fg=C["cyan"],
+            insertbackground="white",
+            font=F["mono"], bd=0, highlightthickness=0)
+        self.logs_box.pack(fill='both', expand=True, padx=6, pady=6)
         
         self.log_search_var.trace_add("write", lambda *args: self.update_logs_display())
-        log_search.insert(0, "Search logs...")
-        log_search.bind("<FocusIn>", lambda e: (log_search.delete(0, 'end') if log_search.get() == "Search logs..." else None, log_search.config(highlightbackground="#2563eb", highlightcolor="#2563eb")))
-        log_search.bind("<FocusOut>", lambda e: (log_search.insert(0, "Search logs...") if not log_search.get() else None, log_search.config(highlightbackground="#1f2937", highlightcolor="#1f2937")))
         
-        # Visual Analytics Card
-        charts_card = ttk.Frame(workspace_frame, style='Card.TFrame', padding=15)
-        charts_card.grid(row=1, column=0, sticky='nsew', padx=(0, 10), pady=(10, 0))
-        lbl_charts_title = ttk.Label(charts_card, text="Visual Pipeline Analytics", style='CardHeading.TLabel')
-        lbl_charts_title.pack(anchor='w', pady=(0, 5))
+        # ── Analytics Card ──
+        charts_card = ctk.CTkFrame(workspace_frame, fg_color=C["card"], corner_radius=12)
+        charts_card.grid(row=1, column=0, sticky='nsew', padx=(0, 8), pady=(8, 0))
         
-        self.chart_canvas = tk.Canvas(charts_card, bg="#1e293b", highlightthickness=0)
-        self.chart_canvas.pack(fill='both', expand=True)
+        lbl_charts_title = ctk.CTkLabel(charts_card, text="Pipeline Analytics", font=F["h3"], text_color=C["text"])
+        lbl_charts_title.pack(anchor='w', padx=14, pady=(12, 6))
         
-        # Chat Card
-        chat_card = ttk.Frame(workspace_frame, style='Card.TFrame', padding=15)
-        chat_card.grid(row=0, column=1, rowspan=2, sticky='nsew', padx=(10, 0))
-        lbl_chat_title = ttk.Label(chat_card, text="Qwen RAG Assistant Chat", style='CardHeading.TLabel')
-        lbl_chat_title.pack(anchor='w', pady=(0, 10))
+        self.chart_canvas = tk.Canvas(charts_card, bg=C["card"], highlightthickness=0, bd=0)
+        self.chart_canvas.pack(fill='both', expand=True, padx=14, pady=(0, 14))
         
-        self.chat_history = scrolledtext.ScrolledText(chat_card, bg="#080c14", fg="#e2e8f0", insertbackground="white", font=('Segoe UI', 9), bd=0, state='disabled', wrap='word', highlightthickness=1, highlightbackground="#1f2937")
-        self.chat_history.pack(fill='both', expand=True, pady=(0, 10))
+        # ── Chat Card ──
+        chat_card = ctk.CTkFrame(workspace_frame, fg_color=C["card"], corner_radius=12)
+        chat_card.grid(row=0, column=1, rowspan=2, sticky='nsew', padx=(8, 0))
         
-        input_row = ttk.Frame(chat_card)
-        input_row.pack(fill='x')
-        self.chat_input = tk.Entry(input_row, bg="#080c14", fg="white", insertbackground="white", font=('Segoe UI', 10), bd=0, highlightthickness=1, highlightbackground="#1f2937")
-        self.chat_input.pack(side='left', fill='x', expand=True, ipady=8, padx=(0, 5))
+        chat_header = ctk.CTkFrame(chat_card, fg_color="transparent")
+        chat_header.pack(fill='x', padx=14, pady=(12, 8))
+        lbl_chat_title = ctk.CTkLabel(chat_header, text="AI Assistant Chat", font=F["h3"], text_color=C["text"])
+        lbl_chat_title.pack(side='left')
+        
+        chat_badge = ctk.CTkLabel(chat_header, text="RAG", fg_color=C["accent"], text_color="white",
+                                 font=F["xs_b"], corner_radius=6, width=42, height=20)
+        chat_badge.pack(side='left', padx=(8, 0))
+        
+        chat_inner = ctk.CTkFrame(chat_card, fg_color=C["input"], corner_radius=8)
+        chat_inner.pack(fill='both', expand=True, padx=14, pady=(0, 10))
+        
+        self.chat_history = scrolledtext.ScrolledText(chat_inner,
+            bg=C["input"], fg=C["text"],
+            insertbackground="white", font=F["sm"],
+            bd=0, state='disabled', wrap='word', highlightthickness=0)
+        self.chat_history.pack(fill='both', expand=True, padx=6, pady=6)
+        
+        input_row = ctk.CTkFrame(chat_card, fg_color="transparent")
+        input_row.pack(fill='x', padx=14, pady=(0, 14))
+        
+        self.chat_input = ctk.CTkEntry(input_row,
+            placeholder_text="Ask about resume, jobs, or settings...",
+            fg_color=C["input"], border_color=C["border"], text_color=C["text"],
+            font=F["sm"], corner_radius=8, height=38)
+        self.chat_input.pack(side='left', fill='x', expand=True, padx=(0, 8))
         self.chat_input.bind("<Return>", lambda e: self.send_chat_message())
         
-        self.chat_input.bind("<FocusIn>", lambda e: self.chat_input.config(highlightbackground="#2563eb", highlightcolor="#2563eb"))
-        self.chat_input.bind("<FocusOut>", lambda e: self.chat_input.config(highlightbackground="#1f2937", highlightcolor="#1f2937"))
-        
-        btn_send = tk.Button(input_row, text="Send", font=('Segoe UI', 9, 'bold'), padx=15)
+        btn_send = create_action_btn(input_row, "Send", self.send_chat_message, "primary", "small")
         btn_send.pack(side='right')
-        btn_send.config(command=self.send_chat_message)
-        make_btn_interactive(btn_send, "#2563eb", "#1d4ed8", "white", "white")
 
-    def create_metric_card(self, parent, label, val, col):
-        card = ttk.Frame(parent, style='Card.TFrame', padding=12)
-        card.grid(row=0, column=col, sticky='nsew', padx=5)
+    def create_metric_card(self, parent, label, val, col, accent_color):
+        card = ctk.CTkFrame(parent, fg_color=C["card"], corner_radius=12)
+        card.grid(row=0, column=col, sticky='nsew', padx=5, pady=2)
         
-        lbl_lbl = ttk.Label(card, text=label, style='Card.TLabel')
-        lbl_lbl.config(foreground='#94a3b8', font=('Segoe UI', 9, 'bold'))
-        lbl_lbl.pack(anchor='w')
-        lbl_val = tk.Label(card, text=val, bg='#1e293b', fg='#ffffff', font=('Segoe UI', 20, 'bold'))
-        lbl_val.pack(anchor='w', pady=(5, 0))
+        accent_bar = ctk.CTkFrame(card, fg_color=accent_color, height=3, corner_radius=0)
+        accent_bar.pack(fill='x', pady=(0, 10))
+        
+        lbl_lbl = ctk.CTkLabel(card, text=label, font=F["xs_b"], text_color=C["muted"], anchor="w")
+        lbl_lbl.pack(anchor='w', padx=14)
+        
+        lbl_val = ctk.CTkLabel(card, text=val, font=F["metric"], text_color=accent_color, anchor="w")
+        lbl_val.pack(anchor='w', padx=14, pady=(2, 10))
         return lbl_val
 
     def toggle_bot_action(self):
         if state.BOT_RUNNING:
             stop_bot()
-            self.btn_toggle.config(text="Start Bot")
-            make_btn_interactive(self.btn_toggle, "#2563eb", "#1d4ed8", "white", "white")
+            self.btn_toggle.configure(text="▶  Start Bot", fg_color=C["accent"], hover_color=C["accent_d"])
         else:
             start_bot_thread()
-            self.btn_toggle.config(text="Stop Bot")
-            make_btn_interactive(self.btn_toggle, "#ef4444", "#dc2626", "white", "white")
+            self.btn_toggle.configure(text="■  Stop Bot", fg_color=C["red"], hover_color=C["red_h"])
 
     def toggle_pause_action(self):
         state.BOT_PAUSED = not state.BOT_PAUSED
         if state.BOT_PAUSED:
-            self.btn_pause.config(text="Resume")
-            make_btn_interactive(self.btn_pause, "#10b981", "#059669", "white", "white")
+            self.btn_pause.configure(text="▶  Resume", fg_color=C["green"], hover_color=C["green_h"])
         else:
-            self.btn_pause.config(text="Pause")
-            make_btn_interactive(self.btn_pause, "#d97706", "#b45309", "white", "white")
+            self.btn_pause.configure(text="⏸  Pause", fg_color=C["amber"], hover_color=C["amber_h"])
 
     def update_logs_display(self):
         if not hasattr(self, 'logs_box'):
@@ -154,25 +176,23 @@ class DashboardView(ttk.Frame):
         skipped = state.METRICS.get("skipped", 0)
         total = applied + skipped + state.METRICS.get("suggested", 0)
         
-        self.applied_metric.config(text=str(applied))
-        self.skipped_metric.config(text=str(skipped))
-        self.total_metric.config(text=str(total))
+        self.applied_metric.configure(text=str(applied))
+        self.skipped_metric.configure(text=str(skipped))
+        self.total_metric.configure(text=str(total))
         
         success_rate = 0
         if applied + skipped > 0:
             success_rate = (applied / (applied + skipped)) * 100
-        self.success_metric.config(text=f"{success_rate:.1f}%")
+        self.success_metric.configure(text=f"{success_rate:.1f}%")
         
-        today_eval = state.SESSION_STATS.get("evaluated", 0)
-        today_match = state.SESSION_STATS.get("matches", 0)
-        self.session_stats_lbl.config(text=f"Today: {today_eval} evaluated, {today_match} matches")
+        today_eval = state.SESSION_STATS.get("evaluated_today", 0)
+        today_match = state.SESSION_STATS.get("matches_today", 0)
+        self.session_stats_lbl.configure(text=f"Today: {today_eval} evaluated, {today_match} matches")
         
         if state.BOT_RUNNING:
-            self.btn_toggle.config(text="Stop Bot")
-            make_btn_interactive(self.btn_toggle, "#ef4444", "#dc2626", "white", "white")
+            self.btn_toggle.configure(text="■  Stop Bot", fg_color=C["red"], hover_color=C["red_h"])
         else:
-            self.btn_toggle.config(text="Start Bot")
-            make_btn_interactive(self.btn_toggle, "#2563eb", "#1d4ed8", "white", "white")
+            self.btn_toggle.configure(text="▶  Start Bot", fg_color=C["accent"], hover_color=C["accent_d"])
             
         self.update_logs_display()
         self.draw_vector_charts()
@@ -185,26 +205,26 @@ class DashboardView(ttk.Frame):
         suggested = state.METRICS.get("suggested", 0)
         total = applied + skipped + suggested
         
-        cx, cy, r = 100, 80, 60
+        cx, cy, r = 100, 75, 55
         if total == 0:
-            self.chart_canvas.create_oval(cx-r, cy-r, cx+r, cy+r, fill="#334155", outline="#475569", width=2)
-            self.chart_canvas.create_text(cx, cy, text="No Data", fill="#94a3b8", font=('Segoe UI', 9, 'bold'))
+            self.chart_canvas.create_oval(cx-r, cy-r, cx+r, cy+r, fill=C["card_hover"], outline=C["border"], width=1)
+            self.chart_canvas.create_text(cx, cy, text="No Data", fill=C["dim"], font=F["xs_b"])
         else:
             angles = {
                 "Applied": (applied / total) * 360,
                 "Suggested": (suggested / total) * 360,
                 "Skipped": (skipped / total) * 360
             }
-            colors = {"Applied": "#10b981", "Suggested": "#3b82f6", "Skipped": "#ef4444"}
+            colors = {"Applied": C["green"], "Suggested": C["blue"], "Skipped": C["red"]}
             
             start_angle = 0
             for label, angle in angles.items():
                 if angle > 0:
-                    self.chart_canvas.create_arc(cx-r, cy-r, cx+r, cy+r, start=start_angle, extent=angle, fill=colors[label], outline="#1e293b", width=1)
+                    self.chart_canvas.create_arc(cx-r, cy-r, cx+r, cy+r, start=start_angle, extent=angle, fill=colors[label], outline=C["card"], width=2)
                     start_angle += angle
-            ri = 38
-            self.chart_canvas.create_oval(cx-ri, cy-ri, cx+ri, cy+ri, fill="#1e293b", outline="#1e293b")
-            self.chart_canvas.create_text(cx, cy, text=f"{total}\nTotal", fill="#ffffff", font=('Segoe UI', 9, 'bold'))
+            ri = 34
+            self.chart_canvas.create_oval(cx-ri, cy-ri, cx+ri, cy+ri, fill=C["card"], outline=C["card"])
+            self.chart_canvas.create_text(cx, cy, text=f"{total}\nTotal", fill=C["text"], font=F["xs_b"])
 
         # Platforms Bar
         plats = {"Indeed": 0, "Naukri": 0, "LinkedIn": 0}
@@ -220,19 +240,19 @@ class DashboardView(ttk.Frame):
             except Exception: pass
             
         max_val = max(list(plats.values()) + [1])
-        bx, by, bw, bh = 220, 130, 45, 80
+        bx, by, bw, bh = 220, 120, 42, 70
         idx = 0
-        colors_plat = {"Indeed": "#3b82f6", "Naukri": "#f59e0b", "LinkedIn": "#0077b5"}
+        colors_plat = {"Indeed": C["blue"], "Naukri": C["amber"], "LinkedIn": "#0077b5"}
         for p, val in plats.items():
             bar_h = int((val / max_val) * bh)
-            x0 = bx + idx * (bw + 20)
+            x0 = bx + idx * (bw + 18)
             y0 = by - bar_h
             x1 = x0 + bw
             y1 = by
             
-            self.chart_canvas.create_rectangle(x0, y0, x1, y1, fill=colors_plat.get(p, "#cbd5e1"), outline="#1e293b", width=1)
-            self.chart_canvas.create_text(x0 + bw/2, y0 - 8, text=str(val), fill="#ffffff", font=('Segoe UI', 8, 'bold'))
-            self.chart_canvas.create_text(x0 + bw/2, by + 12, text=p, fill="#94a3b8", font=('Segoe UI', 8, 'bold'))
+            self.chart_canvas.create_rectangle(x0, y0, x1, y1, fill=colors_plat.get(p, C["dim"]), outline=C["card"], width=1)
+            self.chart_canvas.create_text(x0 + bw/2, y0 - 8, text=str(val), fill=C["text"], font=F["xs_b"])
+            self.chart_canvas.create_text(x0 + bw/2, by + 12, text=p, fill=C["muted"], font=F["xs_b"])
             idx += 1
 
     def send_chat_message(self):
@@ -241,7 +261,7 @@ class DashboardView(ttk.Frame):
         
         self.chat_history.configure(state='normal')
         self.chat_history.insert('end', f"You: {msg}\n\n", "user")
-        self.chat_history.tag_config("user", foreground="#60a5fa", font=('Segoe UI', 9, 'bold'))
+        self.chat_history.tag_config("user", foreground=C["accent_h"], font=('Segoe UI', 9, 'bold'))
         self.chat_history.configure(state='disabled')
         self.chat_history.see('end')
         self.chat_input.delete(0, 'end')
@@ -249,13 +269,13 @@ class DashboardView(ttk.Frame):
         def update_chat_ui(reply, command_data):
             self.chat_history.configure(state='normal')
             hist_content = self.chat_history.get('1.0', 'end')
-            thinking_idx = hist_content.rfind("Qwen: Thinking...")
+            thinking_idx = hist_content.rfind("AI: Thinking...")
             if thinking_idx != -1:
                 line_no = hist_content.count('\n', 0, thinking_idx) + 1
                 self.chat_history.delete(f"{line_no}.0", 'end')
                 
-            self.chat_history.insert('end', f"Qwen: {reply}\n\n", "ai")
-            self.chat_history.tag_config("ai", foreground="#f1f5f9")
+            self.chat_history.insert('end', f"AI: {reply}\n\n", "ai")
+            self.chat_history.tag_config("ai", foreground=C["text"])
             self.chat_history.configure(state='disabled')
             self.chat_history.see('end')
             
@@ -265,7 +285,6 @@ class DashboardView(ttk.Frame):
         def generate_response():
             self.after(0, lambda: self._show_thinking())
             
-            # Using list(state.LOG_QUEUE) to be safe since it's a deque
             logs_list = list(state.LOG_QUEUE)
             logs_context = "\n".join(logs_list[-10:])
             cand_context = json.dumps(CONFIG["candidate"], indent=2)
@@ -318,7 +337,7 @@ Instructions:
 
     def _show_thinking(self):
         self.chat_history.configure(state='normal')
-        self.chat_history.insert('end', "Qwen: Thinking...\n", "thinking")
-        self.chat_history.tag_config("thinking", foreground="#6b7280", font=('Segoe UI', 9, 'italic'))
+        self.chat_history.insert('end', "AI: Thinking...\n", "thinking")
+        self.chat_history.tag_config("thinking", foreground=C["dim"], font=('Segoe UI', 9, 'italic'))
         self.chat_history.configure(state='disabled')
         self.chat_history.see('end')
