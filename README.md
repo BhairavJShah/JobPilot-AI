@@ -175,19 +175,60 @@ If your computer has low specs (e.g. 4GB RAM), use Cloud API mode for **instant 
 
 ---
 
-## 🚀 Running the Application
+## 🚀 Post-Installation Setup & First-Time Walkthrough
 
-Launch the desktop GUI:
+After installing dependencies and setting up your AI engine (Ollama or Cloud API), follow these steps to set up and run JobPilot-AI:
 
-```bash
-python gui_app.py
-```
+### 1. Launch the Application
+- **Windows**: Double-click `run_app.bat` or run:
+  ```powershell
+  python gui_app.py
+  ```
+- **Linux / macOS**: Open terminal inside the project folder and run:
+  ```bash
+  python3 gui_app.py
+  ```
 
-### Initial Configuration in GUI:
-1. **My Profile**: Fill in your name, email, phone, resume path, and technical skills. Fill out the **Candidate QA Vault** for smart ATS form autofilling.
-2. **Credentials**: Optionally enter your logins for Indeed, Naukri, LinkedIn, and SMTP mail server.
-3. **AI & Search**: Customize job search queries (e.g., *Python Developer*, *AI Engineer*), skip keywords, location scope, and daily application safety caps.
-4. **Start Bot**: Click **▶ Start Bot** on the Control Dashboard!
+---
+
+### 2. First-Time Setup in GUI (5 Simple Steps)
+
+#### 📌 Step 1: Candidate Profile & ATS QA Vault (`◉ My Profile`)
+- Enter your **Full Name**, **Email**, **Phone**, **LinkedIn URL**, **GitHub URL**, and **Portfolio URL**.
+- Provide the full local path to your **Resume PDF** (e.g. `C:\Users\YourName\Documents\resume.pdf` or `/home/user/resume.pdf`).
+- Add your **Technical Skills** (e.g., `Python`, `React`, `SQL`).
+- **Fill Candidate QA Vault**: Enter default answers for common ATS questions (*Years of Experience*, *Notice Period*, *Current & Expected CTC*, *Work Authorization*, *Relocation*) so the auto-filler answers recurring questions without stopping.
+- Click **Save Profile**.
+
+#### 🔒 Step 2: Platform Credentials & SMTP Outbox (`🔒 Credentials`)
+- **Job Board Credentials**: Optionally enter your logins for **Indeed**, **Naukri**, and **LinkedIn**. *(If left blank, the bot will use your active Edge browser session or prompt you to log in once)*.
+- **SMTP Mail Server**: Enter your SMTP host (e.g. `smtp.gmail.com`), port (`587`), email address, and App Password to enable direct 1-click recruiter email outreach.
+- Click **Save Credentials**.
+
+#### 🧠 Step 3: Configure AI Engine (`⚙ AI & Search`)
+- Choose your **AI Engine Provider**:
+  - **Local Ollama (Offline)**: Select your installed Ollama model (`qwen2.5:7b`, `3b`, or `1.5b`).
+  - **Cloud AI / REST API**: Choose a preset (Groq, DeepSeek, OpenAI, Gemini), enter your API Key, and click **⚡ Test Connection**.
+
+#### 🎯 Step 4: Job Search Queries & Safety Limits (`⚙ AI & Search`)
+- **Target Job Queries**: Add roles you want to target (e.g., *Software Engineer*, *AI Developer*, *Full Stack Engineer*).
+- **Skip Keywords**: Add keywords you want to avoid (e.g., *C++*, *COBOL*, *Sales*).
+- **Geographic Scope**: Select **Entire Country** or choose specific **Cities & States** using the location hierarchy selector.
+- **Account Safety Limits**: Enable **Account Safety Mode**, set a **Daily Application Cap** (default: `25` jobs/day), and set **Human Emulation Delays** (e.g., `15` to `45` seconds).
+- Click **Save All Settings**.
+
+#### 🤖 Step 5: Start the Bot & Monitor (`⊞ Dashboard`)
+- Navigate to the **Control Dashboard**.
+- Click **▶ Start Bot**.
+- Watch real-time logs in the **Operation Logs** panel and track metrics on the live analytics dashboard.
+
+---
+
+### 3. Using Advanced Features During Bot Execution
+
+- **⚑ Doubt Queue Approvals**: When the AI finds borderline jobs or non-standard titles, they appear in the **Approvals** tab. Select any job to inspect AI match explanations and click **`✓ Approve & Apply`** or **`✕ Reject & Skip`**.
+- **📇 Recruiter Contacts Outreach**: Extracted recruiter details appear in the **Recruiter Contacts** tab. Click **`💬 Open WhatsApp Chat`** to message recruiters on WhatsApp or **`✉️ Send Direct Email`** to send a tailored cover letter & resume attachment via SMTP.
+- **📄 AI Tailored Resume Generator**: Click **`📄 Tailor Resume PDF`** on any job suggestion or contact card to generate a custom-tailored PDF resume saved directly to `tailored_resumes/`.
 
 ---
 
