@@ -1,4 +1,4 @@
-# 🚀 JobPilot-AI (jobLLM) — Autonomous Job Search & Outreach Assistant
+# 🚀 JobPilot-AI — Autonomous Job Search & Outreach Assistant
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](#installation)
@@ -40,8 +40,8 @@ An advanced, stealthy desktop assistant that concurrently crawls major job platf
 
 ```powershell
 # 1. Clone Repository
-git clone https://github.com/BhairavJShah/job_LLM.git
-cd job_LLM
+git clone https://github.com/BhairavJShah/JobPilot-AI.git
+cd JobPilot-AI
 
 # 2. Create Virtual Environment
 python -m venv venv
@@ -62,8 +62,8 @@ playwright install chromium
 sudo apt update && sudo apt install -y python3 python3-pip python3-venv git
 
 # 2. Clone & Setup
-git clone https://github.com/BhairavJShah/job_LLM.git
-cd job_LLM
+git clone https://github.com/BhairavJShah/JobPilot-AI.git
+cd JobPilot-AI
 python3 -m venv venv
 source venv/bin/activate
 
@@ -75,8 +75,8 @@ playwright install --with-deps chromium
 #### Fedora / RHEL / CentOS:
 ```bash
 sudo dnf install -y python3 python3-pip git
-git clone https://github.com/BhairavJShah/job_LLM.git
-cd job_LLM
+git clone https://github.com/BhairavJShah/JobPilot-AI.git
+cd JobPilot-AI
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -86,8 +86,8 @@ playwright install --with-deps chromium
 #### Arch Linux / Manjaro:
 ```bash
 sudo pacman -S python python-pip git
-git clone https://github.com/BhairavJShah/job_LLM.git
-cd job_LLM
+git clone https://github.com/BhairavJShah/JobPilot-AI.git
+cd JobPilot-AI
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -100,8 +100,8 @@ playwright install --with-deps chromium
 
 ```bash
 # 1. Clone Repository
-git clone https://github.com/BhairavJShah/job_LLM.git
-cd job_LLM
+git clone https://github.com/BhairavJShah/JobPilot-AI.git
+cd JobPilot-AI
 
 # 2. Create Virtual Environment
 python3 -m venv venv
