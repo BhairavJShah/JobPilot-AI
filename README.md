@@ -24,6 +24,86 @@ An advanced, stealthy desktop assistant that concurrently crawls major job platf
 
 ---
 
+## 📊 System Architecture & Workflow Pipeline
+
+```mermaid
+graph TD
+    %% Styling Node Categories
+    classDef ui fill:#1e1b4b,stroke:#6366f1,stroke-width:2px,color:#fff;
+    classDef scraper fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#fff;
+    classDef ai fill:#581c87,stroke:#a855f7,stroke-width:2px,color:#fff;
+    classDef decision fill:#78350f,stroke:#f59e0b,stroke-width:2px,color:#fff;
+    classDef action fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#fff;
+
+    subgraph Desktop_GUI ["🎨 CustomTkinter Desktop Interface"]
+        UI_Dash["⊞ Control Dashboard"]:::ui
+        UI_Profile["◉ Profile & ATS QA Vault"]:::ui
+        UI_Settings["⚙ AI & Safety Settings"]:::ui
+    end
+
+    subgraph Crawler_Engine ["⚡ Multi-Source Crawler & Scraper"]
+        JobSpy["Fast Scraper (JobSpy / Guest API)"]:::scraper
+        Playwright["Playwright Persistent Browser (Indeed, Naukri, LinkedIn)"]:::scraper
+    end
+
+    subgraph AI_Engine ["🧠 Dual AI Evaluation Engine"]
+        LocalOllama["Offline Ollama (Qwen 2.5: 7b / 3b / 1.5b)"]:::ai
+        CloudAPI["Cloud REST API (Groq, DeepSeek, OpenAI, Gemini)"]:::ai
+        RAG["PDF Resume Parser & Match Scoring"]:::ai
+    end
+
+    subgraph Workflow_Decision ["⚡ Decision & Safety Pipeline"]
+        Filter["Score Check (≥ Min Match Threshold %)"]:::decision
+        Safety["Account Safety Rate Limiter & Human Delay (15s-45s)"]:::decision
+    end
+
+    subgraph Execution_Layer ["🚀 Execution & Outreach Layer"]
+        AutoApply["Auto-Apply & ATS Form Filler"]:::action
+        DoubtQueue["⚑ Doubt Queue (Human Approval)"]:::action
+        Contacts["📇 Recruiter Extractor (Emails / Phones)"]:::action
+        Outreach["💬 WhatsApp Chat & ✉️ Direct SMTP Email"]:::action
+        PDFGen["📄 AI Tailored Resume PDF Generator"]:::action
+    end
+
+    %% Data Flow Connections
+    UI_Profile -->|Resume PDF & QA Vault| RAG
+    UI_Settings -->|Queries & Safety Rules| Crawler_Engine
+    Crawler_Engine -->|Scraped Job Listings| RAG
+    RAG --> LocalOllama
+    RAG --> CloudAPI
+    LocalOllama -->|Match Score & Reasoning| Filter
+    CloudAPI -->|Match Score & Reasoning| Filter
+
+    Filter -->|High Match (≥ 70%)| Safety
+    Filter -->|Borderline / Doubt| DoubtQueue
+    
+    Safety --> AutoApply
+    Crawler_Engine -->|Raw Job Description| Contacts
+    Contacts --> Outreach
+    RAG --> PDFGen
+
+    DoubtQueue -->|User Approves| AutoApply
+```
+
+### 🔄 End-to-End Execution Flow
+
+```text
+┌────────────────────────┐      ┌────────────────────────┐      ┌────────────────────────┐
+│  1. SEARCH & CRAWL     │  ──► │  2. AI EVALUATION      │  ──► │  3. SAFETY & FILTER    │
+│  Crawls Indeed, Naukri │      │  Parses PDF resume &   │      │  Enforces daily cap    │
+│  & LinkedIn via        │      │  scores match via      │      │  & human typing delay  │
+│  Playwright/JobSpy     │      │  Ollama / Cloud LLM    │      │  (15s - 45s)           │
+└────────────────────────┘      └────────────────────────┘      └────────────────────────┘
+            │                                                               │
+            ▼                                                               ▼
+┌────────────────────────┐                                      ┌────────────────────────┐
+│  5. RECRUITER OUTREACH │      ◄────────────────────────────── │  4. ACTION & APPLY     │
+│  Extracts HR emails &  │      Generates Tailored Resume PDF   │  Auto-fills ATS forms  │
+│  phones for 1-click    │      & routing for direct outreach   │  or queues in Doubt    │
+│  WhatsApp & SMTP Email │                                      │  Approvals tab         │
+└────────────────────────┘                                      └────────────────────────┘
+```
+
 ## 💻 System Requirements
 
 | System Spec | Recommended AI Setup | System Load |
