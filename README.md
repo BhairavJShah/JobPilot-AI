@@ -28,61 +28,53 @@ An advanced, stealthy desktop assistant that concurrently crawls major job platf
 
 ```mermaid
 graph TD
-    %% Styling Node Categories
-    classDef ui fill:#1e1b4b,stroke:#6366f1,stroke-width:2px,color:#fff;
-    classDef scraper fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#fff;
-    classDef ai fill:#581c87,stroke:#a855f7,stroke-width:2px,color:#fff;
-    classDef decision fill:#78350f,stroke:#f59e0b,stroke-width:2px,color:#fff;
-    classDef action fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#fff;
-
-    subgraph Desktop_GUI ["🎨 CustomTkinter Desktop Interface"]
-        UI_Dash["⊞ Control Dashboard"]:::ui
-        UI_Profile["◉ Profile & ATS QA Vault"]:::ui
-        UI_Settings["⚙ AI & Safety Settings"]:::ui
+    subgraph Desktop_GUI ["CustomTkinter Desktop Interface"]
+        UI_Dash["Control Dashboard"]
+        UI_Profile["Profile and ATS QA Vault"]
+        UI_Settings["AI and Safety Settings"]
     end
 
-    subgraph Crawler_Engine ["⚡ Multi-Source Crawler & Scraper"]
-        JobSpy["Fast Scraper (JobSpy / Guest API)"]:::scraper
-        Playwright["Playwright Persistent Browser (Indeed, Naukri, LinkedIn)"]:::scraper
+    subgraph Crawler_Engine ["Multi-Source Crawler and Scraper"]
+        JobSpy["Fast Scraper (JobSpy / Guest API)"]
+        Playwright["Playwright Browser (Indeed, Naukri, LinkedIn)"]
     end
 
-    subgraph AI_Engine ["🧠 Dual AI Evaluation Engine"]
-        LocalOllama["Offline Ollama (Qwen 2.5: 7b / 3b / 1.5b)"]:::ai
-        CloudAPI["Cloud REST API (Groq, DeepSeek, OpenAI, Gemini)"]:::ai
-        RAG["PDF Resume Parser & Match Scoring"]:::ai
+    subgraph AI_Engine ["Dual AI Evaluation Engine"]
+        LocalOllama["Offline Ollama (Qwen 2.5: 7b / 3b / 1.5b)"]
+        CloudAPI["Cloud REST API (Groq, DeepSeek, OpenAI, Gemini)"]
+        RAG["PDF Resume Parser and Match Scoring"]
     end
 
-    subgraph Workflow_Decision ["⚡ Decision & Safety Pipeline"]
-        Filter["Score Check (≥ Min Match Threshold %)"]:::decision
-        Safety["Account Safety Rate Limiter & Human Delay (15s-45s)"]:::decision
+    subgraph Workflow_Decision ["Decision and Safety Pipeline"]
+        Filter["Score Check (Min Match Threshold)"]
+        Safety["Account Safety Rate Limiter and Human Delay"]
     end
 
-    subgraph Execution_Layer ["🚀 Execution & Outreach Layer"]
-        AutoApply["Auto-Apply & ATS Form Filler"]:::action
-        DoubtQueue["⚑ Doubt Queue (Human Approval)"]:::action
-        Contacts["📇 Recruiter Extractor (Emails / Phones)"]:::action
-        Outreach["💬 WhatsApp Chat & ✉️ Direct SMTP Email"]:::action
-        PDFGen["📄 AI Tailored Resume PDF Generator"]:::action
+    subgraph Execution_Layer ["Execution and Outreach Layer"]
+        AutoApply["Auto-Apply and ATS Form Filler"]
+        DoubtQueue["Doubt Queue (Human Approval)"]
+        Contacts["Recruiter Extractor (Emails / Phones)"]
+        Outreach["WhatsApp Chat and Direct SMTP Email"]
+        PDFGen["AI Tailored Resume PDF Generator"]
     end
 
-    %% Data Flow Connections
-    UI_Profile -->|Resume PDF & QA Vault| RAG
-    UI_Settings -->|Queries & Safety Rules| Crawler_Engine
-    Crawler_Engine -->|Scraped Job Listings| RAG
+    UI_Profile --> RAG
+    UI_Settings --> Crawler_Engine
+    Crawler_Engine --> RAG
     RAG --> LocalOllama
     RAG --> CloudAPI
-    LocalOllama -->|Match Score & Reasoning| Filter
-    CloudAPI -->|Match Score & Reasoning| Filter
+    LocalOllama --> Filter
+    CloudAPI --> Filter
 
-    Filter -->|High Match (≥ 70%)| Safety
-    Filter -->|Borderline / Doubt| DoubtQueue
+    Filter -->|"High Match Score (70%+)"| Safety
+    Filter -->|"Borderline Doubt"| DoubtQueue
     
     Safety --> AutoApply
-    Crawler_Engine -->|Raw Job Description| Contacts
+    Crawler_Engine --> Contacts
     Contacts --> Outreach
     RAG --> PDFGen
 
-    DoubtQueue -->|User Approves| AutoApply
+    DoubtQueue -->|"User Approves"| AutoApply
 ```
 
 ### 🔄 End-to-End Execution Flow
