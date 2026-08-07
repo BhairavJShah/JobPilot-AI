@@ -22,7 +22,7 @@ def generate_tailored_resume_pdf(job_title="Software Engineer", company_name="Ta
     log_message(f"PDF RESUME GENERATOR: Tailoring resume for {job_title} at {company_name}...")
     
     cand = CONFIG.get("candidate", {})
-    cand_name = cand.get("name", "Bhairav J Shah")
+    cand_name = cand.get("name", "Candidate Name")
     cand_email = cand.get("email", "candidate@email.com")
     cand_phone = cand.get("phone", "+91 9999999999")
     cand_linkedin = cand.get("linkedin", "")
