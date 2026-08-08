@@ -333,8 +333,10 @@ User Question: {msg}
 Instructions:
 1. Answer the user's question accurately and politely using the resume content, applied database history, profile configs, or live internet job market data.
 2. If they ask about their resume details or past job applications, retrieve it from the context fields.
-3. If they ask to update settings (queries, skip_keywords, skills), append a [COMMAND: ...] tag:
-[COMMAND: {{"type": "update_setting", "key": "queries", "value": ["role"]}}]
+3. If they ask to search or add a new job role (e.g. "look for Python Developer jobs" or "add React Native"), append a command tag:
+[COMMAND: {{"type": "append_query", "value": "Python Developer"}}]
+4. If they state a salary preference or expected CTC (e.g. "my expected CTC is 12 LPA"), append a command tag:
+[COMMAND: {{"type": "update_qa_vault", "key": "expected_ctc", "value": "12"}}]
 """
             reply = query_ai_model(prompt)
             

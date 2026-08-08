@@ -196,10 +196,21 @@ class AppWindow(ctk.CTk):
         val = cmd.get("value")
         
         try:
-            if c_type == "update_setting":
+            if c_type == "append_query":
+                existing = CONFIG["settings"].get("queries", [])
+                if isinstance(val, list):
+                    for v in val:
+                        if v and v not in existing: existing.append(v)
+                elif isinstance(val, str) and val not in existing:
+                    existing.append(val)
+                CONFIG["settings"]["queries"] = existing
+            elif c_type == "update_setting":
                 CONFIG["settings"][key] = val
             elif c_type == "update_candidate":
                 CONFIG["candidate"][key] = val
+            elif c_type == "update_qa_vault":
+                if "qa_vault" not in CONFIG["candidate"]: CONFIG["candidate"]["qa_vault"] = {}
+                CONFIG["candidate"]["qa_vault"][key] = str(val)
                 
             with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
                 json.dump(CONFIG, f, indent=4)
