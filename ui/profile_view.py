@@ -50,12 +50,39 @@ class ProfileView(ctk.CTkFrame):
         grid_qa.pack(fill='x', padx=16, pady=4)
         grid_qa.columnconfigure((0, 1), weight=1, uniform="equal")
         
-        self.qa_exp = add_grid_input(grid_qa, "Experience (Years)", 0, 0)
-        self.qa_notice = add_grid_input(grid_qa, "Notice Period", 0, 1)
-        self.qa_cctc = add_grid_input(grid_qa, "Current Salary / CTC", 1, 0)
-        self.qa_ectc = add_grid_input(grid_qa, "Expected Salary / CTC", 1, 1)
-        self.qa_auth = add_grid_input(grid_qa, "Authorized to Work? (Yes/No)", 2, 0)
-        self.qa_reloc = add_grid_input(grid_qa, "Willing to Relocate? (Yes/No)", 2, 1)
+        # Experience (Years) - Entry
+        self.qa_exp = add_grid_input(grid_qa, "Experience (Years) e.g. 2 or 3.5", 0, 0)
+        
+        # Notice Period - Dropdown System
+        f_notice = ctk.CTkFrame(grid_qa, fg_color="transparent")
+        f_notice.grid(row=0, column=1, padx=8, pady=6, sticky='ew')
+        ctk.CTkLabel(f_notice, text="Notice Period", font=F["sm_b"], text_color=C["muted"], anchor="w").pack(anchor='w', pady=(0, 2))
+        self.qa_notice = ctk.CTkOptionMenu(f_notice, values=["Immediate", "15 Days", "30 Days", "45 Days", "60 Days", "90 Days"],
+                                           fg_color=C["input"], button_color=C["card_hover"], text_color=C["text"],
+                                           dropdown_fg_color=C["card"], font=F["sm"], corner_radius=8, height=36)
+        self.qa_notice.pack(fill='x')
+        
+        # Current CTC & Expected CTC - Numeric Entry
+        self.qa_cctc = add_grid_input(grid_qa, "Current Salary / CTC (e.g. 6 or 12.5)", 1, 0)
+        self.qa_ectc = add_grid_input(grid_qa, "Expected Salary / CTC (e.g. 8 or 15.5)", 1, 1)
+        
+        # Work Authorization - Dropdown System
+        f_auth = ctk.CTkFrame(grid_qa, fg_color="transparent")
+        f_auth.grid(row=2, column=0, padx=8, pady=6, sticky='ew')
+        ctk.CTkLabel(f_auth, text="Authorized to Work?", font=F["sm_b"], text_color=C["muted"], anchor="w").pack(anchor='w', pady=(0, 2))
+        self.qa_auth = ctk.CTkOptionMenu(f_auth, values=["Yes", "No"],
+                                         fg_color=C["input"], button_color=C["card_hover"], text_color=C["text"],
+                                         dropdown_fg_color=C["card"], font=F["sm"], corner_radius=8, height=36)
+        self.qa_auth.pack(fill='x')
+        
+        # Relocation - Dropdown System
+        f_reloc = ctk.CTkFrame(grid_qa, fg_color="transparent")
+        f_reloc.grid(row=2, column=1, padx=8, pady=6, sticky='ew')
+        ctk.CTkLabel(f_reloc, text="Willing to Relocate?", font=F["sm_b"], text_color=C["muted"], anchor="w").pack(anchor='w', pady=(0, 2))
+        self.qa_reloc = ctk.CTkOptionMenu(f_reloc, values=["Yes", "No"],
+                                          fg_color=C["input"], button_color=C["card_hover"], text_color=C["text"],
+                                          dropdown_fg_color=C["card"], font=F["sm"], corner_radius=8, height=36)
+        self.qa_reloc.pack(fill='x')
         
         # ── Technical Skills ──
         add_section_divider(card, "Technical Skills")
@@ -98,16 +125,32 @@ class ProfileView(ctk.CTkFrame):
         
         qa = CONFIG["candidate"].get("qa_vault", {})
         self.qa_exp.delete(0, 'end'); self.qa_exp.insert(0, qa.get("experience_years", "1"))
-        self.qa_notice.delete(0, 'end'); self.qa_notice.insert(0, qa.get("notice_period", "Immediate"))
+        self.qa_notice.set(qa.get("notice_period", "Immediate"))
         self.qa_cctc.delete(0, 'end'); self.qa_cctc.insert(0, qa.get("current_ctc", "0"))
         self.qa_ectc.delete(0, 'end'); self.qa_ectc.insert(0, qa.get("expected_ctc", "Negotiable"))
-        self.qa_auth.delete(0, 'end'); self.qa_auth.insert(0, qa.get("work_authorization", "Yes"))
-        self.qa_reloc.delete(0, 'end'); self.qa_reloc.insert(0, qa.get("willing_to_relocate", "Yes"))
+        self.qa_auth.set(qa.get("work_authorization", "Yes"))
+        self.qa_reloc.set(qa.get("willing_to_relocate", "Yes"))
         
         self.prof_skills.update_items(CONFIG["candidate"].get("skills", []))
 
     def save_profile_action(self):
         try:
+            exp_val = self.qa_exp.get().strip()
+            cctc_val = self.qa_cctc.get().strip()
+            ectc_val = self.qa_ectc.get().strip()
+            
+            # Numeric/Decimal Validation for Experience and CTC
+            num_pattern = re.compile(r'^\d*(\.\d+)?$')
+            if exp_val and not num_pattern.match(exp_val):
+                messagebox.showerror("Invalid Input", "Experience (Years) must be a valid number or decimal (e.g. 2 or 3.5).")
+                return
+            if cctc_val and not num_pattern.match(cctc_val):
+                messagebox.showerror("Invalid Input", "Current Salary / CTC must be a valid number or decimal (e.g. 0, 6, or 12.5).")
+                return
+            if ectc_val and ectc_val.lower() != "negotiable" and not num_pattern.match(ectc_val):
+                messagebox.showerror("Invalid Input", "Expected Salary / CTC must be a valid number (e.g. 8, 15.5) or 'Negotiable'.")
+                return
+
             CONFIG["candidate"]["name"] = self.prof_name.get().strip()
             CONFIG["candidate"]["email"] = self.prof_email.get().strip()
             CONFIG["candidate"]["phone"] = self.prof_phone.get().strip()
@@ -118,12 +161,12 @@ class ProfileView(ctk.CTkFrame):
             CONFIG["candidate"]["resume_path"] = self.prof_resume.get().strip()
             
             if "qa_vault" not in CONFIG["candidate"]: CONFIG["candidate"]["qa_vault"] = {}
-            CONFIG["candidate"]["qa_vault"]["experience_years"] = self.qa_exp.get().strip()
-            CONFIG["candidate"]["qa_vault"]["notice_period"] = self.qa_notice.get().strip()
-            CONFIG["candidate"]["qa_vault"]["current_ctc"] = self.qa_cctc.get().strip()
-            CONFIG["candidate"]["qa_vault"]["expected_ctc"] = self.qa_ectc.get().strip()
-            CONFIG["candidate"]["qa_vault"]["work_authorization"] = self.qa_auth.get().strip()
-            CONFIG["candidate"]["qa_vault"]["willing_to_relocate"] = self.qa_reloc.get().strip()
+            CONFIG["candidate"]["qa_vault"]["experience_years"] = exp_val if exp_val else "1"
+            CONFIG["candidate"]["qa_vault"]["notice_period"] = self.qa_notice.get()
+            CONFIG["candidate"]["qa_vault"]["current_ctc"] = cctc_val if cctc_val else "0"
+            CONFIG["candidate"]["qa_vault"]["expected_ctc"] = ectc_val if ectc_val else "Negotiable"
+            CONFIG["candidate"]["qa_vault"]["work_authorization"] = self.qa_auth.get()
+            CONFIG["candidate"]["qa_vault"]["willing_to_relocate"] = self.qa_reloc.get()
             
             with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
                 json.dump(CONFIG, f, indent=4)

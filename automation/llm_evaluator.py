@@ -7,6 +7,38 @@ from core.db_manager import log_message
 
 MAX_RETRIES = 2
 
+def check_live_ai_status():
+    """
+    Empirically pings the active AI model (Ollama local endpoint or Cloud REST API)
+    and returns a tuple: (status_text, is_online_bool)
+    """
+    provider = get_ai_provider()
+    if provider == "cloud":
+        cfg = get_cloud_ai_config()
+        m_name = cfg.get("model") or cfg.get("preset", "Cloud")
+        key = cfg.get("api_key") or cfg.get("password")
+        if not key and cfg.get("auth_type") == "api_key":
+            return (f"☁️ Cloud ({m_name}): Key Missing", False)
+        return (f"☁️ Cloud ({m_name}): Ready", True)
+    else:
+        l_model = get_model_name()
+        try:
+            url = "http://127.0.0.1:11434/api/tags"
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode('utf-8'))
+                    models = [m.get("name") for m in data.get("models", [])]
+                    base_m = l_model.split(":")[0]
+                    found = any(base_m in m for m in models)
+                    if found:
+                        return (f"🤖 Local ({l_model}): Ready", True)
+                    else:
+                        return (f"🤖 Local ({l_model}): Model Not Pulled", False)
+        except Exception:
+            return (f"🤖 Local ({l_model}): Ollama Offline", False)
+        return (f"🤖 Local ({l_model}): Ready", True)
+
 def query_local_qwen(prompt):
     """Query the local Ollama LLM with automatic retry on transient failures."""
     url = "http://127.0.0.1:11434/api/generate"
@@ -58,121 +90,107 @@ def query_cloud_ai(prompt):
             headers['x-goog-api-key'] = api_key
         elif "anthropic.com" in base_url:
             headers['x-api-key'] = api_key
-            headers['anthropic-version'] = '2023-06-01'
         else:
             headers['Authorization'] = f"Bearer {api_key}"
-            
-    # 2. Determine Endpoint & Payload format
+
+    # 2. Build Endpoint URL & Request Payload
     if "generativelanguage.googleapis.com" in base_url:
         endpoint = f"{base_url}/models/{model}:generateContent"
-        if api_key and 'x-goog-api-key' not in headers:
-            endpoint += f"?key={api_key}"
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    else:
-        # Standard OpenAI / Custom REST Chat Completions API
-        endpoint = f"{base_url}/chat/completions" if not base_url.endswith("/chat/completions") else base_url
+    elif "anthropic.com" in base_url:
+        endpoint = f"{base_url}/v1/messages"
         payload = {
             "model": model,
-            "messages": [
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": 0.2
+            "max_tokens": 1024,
+            "messages": [{"role": "user", "content": prompt}]
+        }
+    else:
+        # Standard OpenAI / v1 format
+        if not base_url.endswith("/chat/completions") and not base_url.endswith("/generate"):
+            endpoint = f"{base_url}/chat/completions"
+        else:
+            endpoint = base_url
+            
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.3
         }
 
     req_data = json.dumps(payload).encode('utf-8')
-    
+
     for attempt in range(MAX_RETRIES + 1):
-        req = urllib.request.Request(
-            endpoint, 
-            data=req_data, 
-            headers=headers
-        )
         try:
-            with urllib.request.urlopen(req, timeout=45) as response:
+            req = urllib.request.Request(endpoint, data=req_data, headers=headers)
+            with urllib.request.urlopen(req, timeout=30) as response:
                 res = json.loads(response.read().decode('utf-8'))
                 
-                # Parse OpenAI / Custom style choices
+                # Parse response according to provider schema
                 if "choices" in res and len(res["choices"]) > 0:
-                    choice = res["choices"][0]
-                    if "message" in choice:
-                        return choice["message"].get("content", "").strip()
-                    elif "text" in choice:
-                        return choice["text"].strip()
-                # Parse Google style candidates
+                    msg = res["choices"][0].get("message", {})
+                    return msg.get("content", "").strip()
                 elif "candidates" in res and len(res["candidates"]) > 0:
                     parts = res["candidates"][0].get("content", {}).get("parts", [])
                     if parts:
                         return parts[0].get("text", "").strip()
-                # Parse Anthropic style content list
-                elif "content" in res and isinstance(res["content"], list) and len(res["content"]) > 0:
-                    first_item = res["content"][0]
-                    if isinstance(first_item, dict) and "text" in first_item:
-                        return first_item["text"].strip()
-                return json.dumps(res)
+                elif "content" in res and isinstance(res["content"], list):
+                    return res["content"][0].get("text", "").strip()
+                else:
+                    return str(res)
         except Exception as e:
             if attempt < MAX_RETRIES:
                 import time
-                time.sleep(1.5 * (attempt + 1))
+                time.sleep(2 * (attempt + 1))
                 continue
-            log_message(f"Universal Cloud AI error ({model} at {base_url}): {e}. Falling back to local Ollama...")
-            return query_local_qwen(prompt)
+            log_message(f"Cloud AI Error ({endpoint}): {e}")
+            return f"Cloud AI Service Error: {e}"
 
 def query_ai_model(prompt):
-    """Query either Local Ollama or Universal Cloud AI based on user setting."""
+    """Unified entry point for AI evaluations."""
     provider = get_ai_provider()
     if provider == "cloud":
         return query_cloud_ai(prompt)
     else:
         return query_local_qwen(prompt)
 
-def evaluate_job_with_qwen(title, description):
-    import core.state as state
-    
+def evaluate_job_with_qwen(job_title, job_description):
+    """
+    Evaluates job relevance using the active AI provider (Local Ollama or Cloud REST API).
+    Returns JSON dictionary with match score (0-100), reasoning, and approval flag.
+    """
     prompt = f"""
-You are a technical recruiter assistant. Your job is to strictly evaluate if the candidate matches the job description.
-Candidate Technical Profile:
-- Skills: {', '.join(CONFIG['candidate'].get('skills', []))}.
+You are an expert HR recruiter and AI job matching system.
 
-Evaluate the following job:
-Job Title: {title}
-Job Description:
-{description}
+Evaluate if this job listing matches the candidate's target profile:
+Job Title: {job_title}
+Job Description Snippet:
+{job_description[:2000]}
 
-Rules:
-1. Skip/Reject the job ONLY if it requires explicit forbidden keywords: {', '.join(CONFIG['settings']['skip_keywords'])}.
-2. Calculate a percentage match score (from 0 to 100) based on candidate skills and transferable technical qualifications.
-3. If the role matches candidate qualifications OR if the candidate has transferable skills to do the job (even if the title or exact keywords differ), set "is_match": true.
-4. Set "should_approve": true for ANY job where title keywords differ from exact candidate search titles, or if candidate has general qualifications for the role, or if there is any doubt — so the user can review and approve it in the Approvals queue!
-5. DO NOT reject jobs that the candidate is qualified to do. When in doubt, mark "is_match": true and "should_approve": true.
+Candidate Skills: {', '.join(CONFIG['candidate']['skills'])}
+Candidate Target Roles: {', '.join(CONFIG['settings']['queries'])}
+Skip Keywords (Reject if present): {', '.join(CONFIG['settings']['skip_keywords'])}
 
-Respond ONLY in the following JSON format:
-{{
-  "is_match": true/false,
-  "score": 85,
-  "reason": "Explain briefly why it matches, what skills apply, or why user approval is requested",
-  "should_approve": true/false
-}}
+Instructions:
+1. Return a JSON object with keys:
+   - "score": Integer score from 0 to 100 representing job match fit.
+   - "is_match": True if score >= {CONFIG['settings']['min_score']}, else False.
+   - "reason": Brief 1-2 sentence explanation of why this job matches or fails.
+   - "should_approve": True if job title is borderline, non-standard, or salary is unusually high/low requiring human approval.
+
+Respond ONLY with valid JSON.
 """
-    res_text = query_ai_model(prompt)
-    
-    # Track session evaluation count
-    state.SESSION_STATS["evaluated_today"] = state.SESSION_STATS.get("evaluated_today", 0) + 1
+    reply = query_ai_model(prompt)
     
     try:
-        match = re.search(r'\{.*\}', res_text, re.DOTALL)
+        match = re.search(r'\{.*\}', reply, re.DOTALL)
         if match:
-            result = json.loads(match.group(0))
-            if result.get("is_match"):
-                state.SESSION_STATS["matches_today"] = state.SESSION_STATS.get("matches_today", 0) + 1
-            return result
-    except Exception:
-        pass
-    
-    # Fallback: keyword-based scoring
-    score = 0
-    skills = [s.lower() for s in CONFIG['candidate'].get('skills', [])]
-    desc_l = description.lower()
-    for s in skills:
-        if s in desc_l:
-            score += 10
-    return {"is_match": score >= CONFIG['settings']['min_score'], "score": min(score, 100), "reason": "Fallback match based on keywords", "should_approve": False}
+            return json.loads(match.group(0))
+    except Exception as e:
+        log_message(f"Error parsing AI response JSON: {e}")
+        
+    return {
+        "score": 50,
+        "is_match": False,
+        "reason": "Could not parse structured evaluation from AI model.",
+        "should_approve": True
+    }

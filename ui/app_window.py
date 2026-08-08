@@ -7,6 +7,7 @@ from tkinter import ttk
 import core.state as state
 from core.config_manager import CONFIG, CONFIG_PATH, get_model_name, get_active_model_display
 from core.db_manager import APPLIED_DB_PATH, recalculate_metrics
+from automation.llm_evaluator import check_live_ai_status
 from ui.components import C, F, configure_treeview_style
 from ui.dashboard_view import DashboardView
 from ui.history_view import HistoryView
@@ -114,9 +115,10 @@ class AppWindow(ctk.CTk):
         status_f = ctk.CTkFrame(self.top_bar, fg_color="transparent")
         status_f.pack(side='left', padx=16, fill='y')
         
-        active_disp = get_active_model_display()
-        self.ind_qwen = ctk.CTkLabel(status_f, text=f"● {active_disp}: Ready",
-                                    font=F["xs_b"], text_color=C["green"], cursor="hand2")
+        status_str, is_online = check_live_ai_status()
+        ind_color = C["green"] if is_online else C["red"]
+        self.ind_qwen = ctk.CTkLabel(status_f, text=f"● {status_str}",
+                                     font=F["xs_b"], text_color=ind_color, cursor="hand2")
         self.ind_qwen.pack(side='left', padx=(0, 16), pady=12)
         self.ind_qwen.bind("<Button-1>", lambda e: self.show_view('settings'))
         
@@ -209,7 +211,9 @@ class AppWindow(ctk.CTk):
     def reload_all_views(self):
         self.views['settings'].reload_view_data()
         self.views['profile'].reload_profile_fields()
-        self.ind_qwen.configure(text=f"● {get_active_model_display()}: Ready")
+        status_str, is_online = check_live_ai_status()
+        ind_color = C["green"] if is_online else C["red"]
+        self.ind_qwen.configure(text=f"● {status_str}", text_color=ind_color)
         recalculate_metrics()
         self.refresh_nav_buttons()
 

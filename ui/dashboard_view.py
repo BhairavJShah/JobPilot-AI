@@ -10,7 +10,8 @@ import core.state as state
 from core.config_manager import CONFIG, CONFIG_PATH
 from core.db_manager import log_message, recalculate_metrics, APPLIED_DB_PATH
 from core.resume_parser import extract_resume_text
-from automation.llm_evaluator import query_local_qwen
+from automation.llm_evaluator import query_ai_model
+from automation.job_scraper import fast_scrape_jobs
 from automation.bot_runner import start_bot_thread, stop_bot
 from ui.components import C, F, create_action_btn
 
@@ -299,6 +300,19 @@ class DashboardView(ctk.CTkFrame):
                             history_text = lines[0] + "".join(lines[-10:])
                 except Exception: pass
             
+            # Web Search Integration: Check if user question requests live internet/job market data
+            web_context = ""
+            msg_lower = msg.lower()
+            if any(k in msg_lower for k in ["search", "find", "job", "opening", "salary", "market", "latest", "company", "recruit"]):
+                try:
+                    q_term = CONFIG["settings"]["queries"][0] if CONFIG["settings"]["queries"] else "Software Engineer"
+                    web_results = fast_scrape_jobs(query=q_term, limit=5)
+                    if web_results:
+                        formatted_jobs = [f"- {j['title']} at {j['company']} ({j['platform']}): {j['url']}" for j in web_results[:5]]
+                        web_context = "5. Live Internet Job Market Data (Real-time Web Search):\n" + "\n".join(formatted_jobs) + "\n"
+                except Exception as e:
+                    web_context = f"5. Live Internet Search Notice: {e}\n"
+
             prompt = f"""
 You are the Job Assistant AI agent. You have access to:
 1. Candidate's PDF Resume content:
@@ -313,15 +327,16 @@ You are the Job Assistant AI agent. You have access to:
 4. Recent Operations Logs:
 {logs_context}
 
+{web_context}
 User Question: {msg}
 
 Instructions:
-1. Answer the user's question accurately and politely using the resume content, applied database history, or profile configs above.
+1. Answer the user's question accurately and politely using the resume content, applied database history, profile configs, or live internet job market data.
 2. If they ask about their resume details or past job applications, retrieve it from the context fields.
 3. If they ask to update settings (queries, skip_keywords, skills), append a [COMMAND: ...] tag:
 [COMMAND: {{"type": "update_setting", "key": "queries", "value": ["role"]}}]
 """
-            reply = query_local_qwen(prompt)
+            reply = query_ai_model(prompt)
             
             command_data = None
             match_cmd = re.search(r'\[COMMAND:\s*(.*?)\]', reply, re.DOTALL)
