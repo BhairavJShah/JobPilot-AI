@@ -71,12 +71,12 @@ def query_local_qwen(prompt):
 def query_cloud_ai(prompt):
     """Universal Cloud AI query supporting API Key, Bearer Token, Username/Password Auth, and Custom REST endpoints."""
     cfg = get_cloud_ai_config()
-    base_url = cfg["base_url"].rstrip('/')
-    model = cfg["model"]
-    auth_type = cfg["auth_type"]
-    api_key = cfg["api_key"]
-    username = cfg["username"]
-    password = cfg["password"]
+    base_url = (cfg.get("base_url") or "https://api.openai.com/v1").strip().rstrip('/')
+    model = (cfg.get("model") or "gpt-4o-mini").strip()
+    auth_type = cfg.get("auth_type", "api_key")
+    api_key = (cfg.get("api_key") or "").strip()
+    username = (cfg.get("username") or "").strip()
+    password = (cfg.get("password") or "").strip()
     
     headers = {'Content-Type': 'application/json'}
     
@@ -158,6 +158,18 @@ def evaluate_job_with_qwen(job_title, job_description):
     Evaluates job relevance using the active AI provider (Local Ollama or Cloud REST API).
     Returns JSON dictionary with match score (0-100), reasoning, and approval flag.
     """
+    cand_obj = CONFIG.get('candidate', {}) if isinstance(CONFIG.get('candidate'), dict) else {}
+    set_obj = CONFIG.get('settings', {}) if isinstance(CONFIG.get('settings'), dict) else {}
+    
+    cand_skills = cand_obj.get('skills', []) if isinstance(cand_obj.get('skills'), list) else []
+    target_queries = set_obj.get('queries', []) if isinstance(set_obj.get('queries'), list) else []
+    skip_kw = set_obj.get('skip_keywords', []) if isinstance(set_obj.get('skip_keywords'), list) else []
+    min_score_val = set_obj.get('min_score', 70)
+
+    skills_str = ", ".join([str(s) for s in cand_skills])
+    queries_str = ", ".join([str(q) for q in target_queries])
+    skip_str = ", ".join([str(k) for k in skip_kw])
+
     prompt = f"""
 You are an expert HR recruiter and AI job matching system.
 
@@ -166,14 +178,14 @@ Job Title: {job_title}
 Job Description Snippet:
 {job_description[:2000]}
 
-Candidate Skills: {', '.join(CONFIG['candidate']['skills'])}
-Candidate Target Roles: {', '.join(CONFIG['settings']['queries'])}
-Skip Keywords (Reject if present): {', '.join(CONFIG['settings']['skip_keywords'])}
+Candidate Skills: {skills_str}
+Candidate Target Roles: {queries_str}
+Skip Keywords (Reject if present): {skip_str}
 
 Instructions:
 1. Return a JSON object with keys:
    - "score": Integer score from 0 to 100 representing job match fit.
-   - "is_match": True if score >= {CONFIG['settings']['min_score']}, else False.
+   - "is_match": True if score >= {min_score_val}, else False.
    - "reason": Brief 1-2 sentence explanation of why this job matches or fails.
    - "should_approve": True if job title is borderline, non-standard, or salary is unusually high/low requiring human approval.
 

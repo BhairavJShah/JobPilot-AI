@@ -70,7 +70,8 @@ async def verify_indeed_auth(page):
                         continue
                     break
                 except Exception:
-                    # TargetClosedError or similar
+                    if page.is_closed():
+                        break
                     await asyncio.sleep(2)
             if state.BOT_RUNNING:
                 log_message("Indeed login detected! Continuing...")
@@ -116,6 +117,8 @@ async def verify_naukri_auth(page):
                             continue
                         break
                     except Exception:
+                        if page.is_closed():
+                            break
                         await asyncio.sleep(2)
                 if state.BOT_RUNNING:
                     log_message("Naukri login detected! Continuing...")
@@ -173,6 +176,8 @@ async def verify_linkedin_auth(page):
                         else:
                             break
                     except Exception:
+                        if page.is_closed():
+                            break
                         await asyncio.sleep(2)
                 if state.BOT_RUNNING:
                     log_message("LinkedIn login detected! Continuing...")
@@ -355,6 +360,17 @@ async def process_job_evaluation(title, company, href, desc_text, platform, desc
         return False
 
 
+def get_edge_executable_path():
+    possible_paths = [
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\Application\msedge.exe")
+    ]
+    for path in possible_paths:
+        if os.path.exists(path):
+            return path
+    return None
+
 async def run_bot_async():
     global CURRENT_STATUS
     log_message("Starting Local Job Bot Loop...")
@@ -364,16 +380,20 @@ async def run_bot_async():
         try:
             user_data_dir = os.path.join(os.path.expanduser("~"), "edge-debug-profile")
             log_message("Launching Edge Browser...")
-            browser = await p.chromium.launch_persistent_context(
-                user_data_dir,
-                executable_path=r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-                headless=False,
-                args=[
+            edge_exe = get_edge_executable_path()
+            launch_kwargs = {
+                "user_data_dir": user_data_dir,
+                "headless": False,
+                "args": [
                     "--remote-debugging-port=9222", 
                     "--disable-blink-features=AutomationControlled"
                 ],
-                ignore_default_args=["--enable-automation"]
-            )
+                "ignore_default_args": ["--enable-automation"]
+            }
+            if edge_exe:
+                launch_kwargs["executable_path"] = edge_exe
+                
+            browser = await p.chromium.launch_persistent_context(**launch_kwargs)
             
             state.ACTIVE_BROWSER_CONTEXT = browser
             state.ACTIVE_EVENT_LOOP = asyncio.get_running_loop()
