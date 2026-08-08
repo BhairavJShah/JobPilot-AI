@@ -128,7 +128,7 @@ class ProfileView(ctk.CTkFrame):
         self.qa_exp.delete(0, 'end'); self.qa_exp.insert(0, qa.get("experience_years", "1"))
         self.qa_notice.set(qa.get("notice_period", "Immediate"))
         self.qa_cctc.delete(0, 'end'); self.qa_cctc.insert(0, qa.get("current_ctc", "0"))
-        self.qa_ectc.delete(0, 'end'); self.qa_ectc.insert(0, qa.get("expected_ctc", "Negotiable"))
+        self.qa_ectc.delete(0, 'end'); self.qa_ectc.insert(0, qa.get("expected_ctc", "0"))
         self.qa_auth.set(qa.get("work_authorization", "Yes"))
         self.qa_reloc.set(qa.get("willing_to_relocate", "Yes"))
         
@@ -148,8 +148,8 @@ class ProfileView(ctk.CTkFrame):
             if cctc_val and not num_pattern.match(cctc_val):
                 messagebox.showerror("Invalid Input", "Current Salary / CTC must be a valid number or decimal (e.g. 0, 6, or 12.5).")
                 return
-            if ectc_val and ectc_val.lower() != "negotiable" and not num_pattern.match(ectc_val):
-                messagebox.showerror("Invalid Input", "Expected Salary / CTC must be a valid number (e.g. 8, 15.5) or 'Negotiable'.")
+            if ectc_val and not num_pattern.match(ectc_val):
+                messagebox.showerror("Invalid Input", "Expected Salary / CTC must be a valid number or decimal (e.g. 0, 8, or 15.5).")
                 return
 
             CONFIG["candidate"]["name"] = self.prof_name.get().strip()

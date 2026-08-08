@@ -41,7 +41,7 @@ DEFAULT_CONFIG = {
             "experience_years": "1",
             "notice_period": "Immediate",
             "current_ctc": "0",
-            "expected_ctc": "Negotiable",
+            "expected_ctc": "0",
             "work_authorization": "Yes",
             "require_sponsorship": "No",
             "willing_to_relocate": "Yes",
