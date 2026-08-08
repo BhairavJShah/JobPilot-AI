@@ -11,6 +11,7 @@ from core.db_manager import log_message, save_to_db, load_applied_urls, recalcul
 from core.contact_extractor import extract_recruiter_contacts
 from automation.llm_evaluator import evaluate_job_with_qwen
 from automation.form_autofiller import auto_fill_playwright_form
+from automation.job_scraper import fast_scrape_jobs
 
 # Pause helper
 async def check_pause():
@@ -706,65 +707,38 @@ async def run_bot_async():
             
             # Web-Wide Internet Career Page Scanner task
             async def run_internet_scanner_loop(browser):
-                page = await browser.new_page()
-                log_message("Web Scanner: Initializing Web-Wide Internet Career Page Scanner...")
+                log_message("Web Scanner: Initializing Rapid Web Career Page Scanner...")
                 for query in queries:
                     await check_pause()
                     if not state.BOT_RUNNING: break
                     
-                    ats_sites = ["site:greenhouse.io", "site:lever.co", "site:jobs.ashbyhq.com", "site:workday.com"]
-                    for site in ats_sites:
-                        await check_pause()
-                        if not state.BOT_RUNNING: break
+                    log_message(f"Web Scanner: Searching broader web for '{query}'...")
+                    try:
+                        scraped = fast_scrape_jobs(query=query, limit=10)
+                        log_message(f"Web Scanner: Discovered {len(scraped)} web career listings for '{query}'.")
                         
-                        search_term = f"{query} {site} India"
-                        encoded_search = urllib.parse.quote(search_term)
-                        search_url = f"https://html.duckduckgo.com/html/?q={encoded_search}"
-                        
-                        log_message(f"Web Scanner: Searching broader web for '{search_term}'...")
-                        try:
-                            await goto_with_retry(page, search_url)
-                            await asyncio.sleep(4)
+                        for item in scraped:
+                            await check_pause()
+                            if not state.BOT_RUNNING: break
                             
-                            links = await page.locator("a.result__url").all()
-                            log_message(f"Web Scanner: Found {len(links)} web career results for '{search_term}'.")
+                            href = item.get("url", "")
+                            if not href or href in APPLIED_URLS_SET: continue
                             
-                            for link_el in links[:5]:
-                                await check_pause()
-                                if not state.BOT_RUNNING: break
-                                
-                                href = await link_el.get_attribute("href")
-                                if not href: continue
-                                
-                                if "duckduckgo.com/l/?" in href:
-                                    match = re.search(r'uddg=([^&]+)', href)
-                                    if match:
-                                        href = urllib.parse.unquote(match.group(1))
-                                        
-                                if href in APPLIED_URLS_SET: continue
-                                
-                                log_message(f"Web Scanner: Inspecting web career page: {href}")
-                                web_page = await browser.new_page()
-                                try:
-                                    await goto_with_retry(web_page, href, timeout=20000)
-                                    await asyncio.sleep(3)
-                                    
-                                    web_title = await web_page.title()
-                                    desc_el = web_page.locator("body")
-                                    desc_text = await desc_el.inner_text() if await desc_el.count() > 0 else web_title
-                                    
-                                    company_match = re.search(r'at\s+([A-Z][A-Za-z0-9\s]+)', web_title)
-                                    company_name = company_match.group(1).strip() if company_match else "Web Hiring Portal"
-                                    
-                                    await process_job_evaluation(web_title, company_name, href, desc_text[:3000], "Web Search", web_page, browser)
-                                except Exception as e:
-                                    log_message(f"Web Scanner error on {href}: {e}")
-                                finally:
-                                    await web_page.close()
-                                await asyncio.sleep(2)
-                        except Exception as e:
-                            log_message(f"Web Scanner search error for '{search_term}': {e}")
-                await page.close()
+                            title = item.get("title", "Software Engineer")
+                            company = item.get("company", "Tech Company")
+                            desc = item.get("description", title)
+                            
+                            log_message(f"Web Scanner: Inspecting '{title}' at '{company}'...")
+                            web_page = await browser.new_page()
+                            try:
+                                await process_job_evaluation(title, company, href, desc, "Web Search", web_page, browser)
+                            except Exception as e:
+                                log_message(f"Web Scanner evaluation notice: {e}")
+                            finally:
+                                await web_page.close()
+                            await human_delay()
+                    except Exception as e:
+                        log_message(f"Web Scanner search error for '{query}': {e}")
 
             # Setup parallel tab gathers
             if "Indeed" in pages:
