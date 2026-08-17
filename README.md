@@ -328,7 +328,8 @@ JobPilot-AI/
 │   ├── db_manager.py       # CSV database logger & metrics engine
 │   ├── email_smtp.py       # Direct SMTP outreach engine
 │   ├── resume_exporter.py # AI-tailored PDF resume generator
-│   └── resume_parser.py   # PyPDF2 resume parser
+│   ├── resume_parser.py   # PyPDF2 resume parser
+│   └── state.py            # Global shared runtime state & thread-safe flags
 ├── ui/                     # CustomTkinter Dark GUI Views
 │   ├── app_window.py       # Main window & sidebar navigation
 │   ├── components.py       # Design system, pill-chips, rounded CTk widgets
@@ -341,7 +342,9 @@ JobPilot-AI/
 │   ├── profile_view.py     # Candidate profile & ATS QA vault setup
 │   └── accounts_view.py    # Platform logins & SMTP credentials setup
 ├── gui_app.py              # Application entry point
+├── run_app.bat             # Windows one-click batch launcher
 ├── config.json             # Local user configuration file (Git-ignored)
+├── config.json.example     # Example configuration template for setup
 ├── applied_jobs.csv        # Application database (Git-ignored)
 └── recruiter_contacts.csv  # Recruiter database (Git-ignored)
 ```

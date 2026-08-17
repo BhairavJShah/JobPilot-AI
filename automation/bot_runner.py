@@ -21,10 +21,10 @@ async def check_pause():
 async def check_safety_limit():
     safe_mode = CONFIG.get("settings", {}).get("safe_mode", True)
     daily_cap = CONFIG.get("settings", {}).get("daily_apply_cap", 25)
-    applied_count = state.METRICS.get("applied", 0)
+    applied_today = state.SESSION_STATS.get("applied_today", 0)
     
-    if safe_mode and applied_count >= daily_cap:
-        log_message(f"🛡️ SAFETY LIMIT REACHED: Reached daily application cap ({applied_count}/{daily_cap}). Pausing bot to protect your platform account.")
+    if safe_mode and applied_today >= daily_cap:
+        log_message(f"🛡️ SAFETY LIMIT REACHED: Reached daily application cap ({applied_today}/{daily_cap}). Pausing bot to protect your platform account.")
         state.BOT_PAUSED = True
         return True
     return False
@@ -188,12 +188,24 @@ async def verify_linkedin_auth(page):
         log_message(f"LinkedIn auth verification failed: {e}")
 
 
-async def wait_for_manual_submission(page):
-    log_message("Waiting up to 60s for manual form completion (checking every 3s)...")
+async def wait_for_manual_submission(page, has_doubts=False):
+    wait_time = 120 if has_doubts else 60
+    log_message(f"Waiting up to {wait_time}s for form completion (checking every 3s)...")
+    if has_doubts:
+        log_message("Some questions need your manual input — please answer them in the browser window.")
     try:
-        for _ in range(20):
+        checks = wait_time // 3
+        for _ in range(checks):
             if not state.BOT_RUNNING: break
             if page.is_closed(): break
+            # Check if form was submitted (page navigated away from form)
+            try:
+                submit_btn = page.locator("button:has-text('Submit'), button:has-text('Send application')")
+                if await submit_btn.count() == 0:
+                    # No submit button = likely already submitted
+                    break
+            except Exception:
+                pass
             await asyncio.sleep(3)
     except Exception:
         pass
@@ -258,11 +270,15 @@ async def process_job_evaluation(title, company, href, desc_text, platform, desc
                 log_message(f"Indeed MATCH FOUND ({score}%): {title} at {company}. Initiating Easy Apply...")
                 await apply_btn.first.click()
                 await asyncio.sleep(3)
+                has_doubts = False
                 try:
-                    await auto_fill_playwright_form(desc_page)
+                    await auto_fill_playwright_form(desc_page, job_title=title, company=company, job_url=href, platform="Indeed")
+                    # Check if any form doubts were added
+                    with state.DOUBT_LOCK:
+                        has_doubts = any(d.get("type") == "form_question" and d.get("url") == href for d in state.DOUBT_QUEUE)
                 except Exception as e:
                     log_message(f"Auto-fill error: {e}")
-                await wait_for_manual_submission(desc_page)
+                await wait_for_manual_submission(desc_page, has_doubts=has_doubts)
                 save_to_db(href, title, company, "Indeed", "Applied")
             elif await external_apply.count() > 0:
                 career_url = await external_apply.first.get_attribute("href")
@@ -302,11 +318,14 @@ async def process_job_evaluation(title, company, href, desc_text, platform, desc
                             log_message(f"SUGGESTED: Naukri redirected page to external career site: {current_url}")
                             save_to_db(href, title, company, "Naukri", "Suggested", f"Career Page: {current_url}")
                         else:
+                            has_doubts = False
                             try:
-                                await auto_fill_playwright_form(desc_page)
+                                await auto_fill_playwright_form(desc_page, job_title=title, company=company, job_url=href, platform="Naukri")
+                                with state.DOUBT_LOCK:
+                                    has_doubts = any(d.get("type") == "form_question" and d.get("url") == href for d in state.DOUBT_QUEUE)
                             except Exception as e:
                                 log_message(f"Auto-fill error: {e}")
-                            await wait_for_manual_submission(desc_page)
+                            await wait_for_manual_submission(desc_page, has_doubts=has_doubts)
                             save_to_db(href, title, company, "Naukri", "Applied")
                     except Exception:
                         pass
@@ -318,18 +337,21 @@ async def process_job_evaluation(title, company, href, desc_text, platform, desc
                 save_to_db(href, title, company, "Naukri", "Suggested", "Apply manually")
                 
         elif platform == "LinkedIn":
-            easy_apply_btn = desc_page.locator("button.jobs-apply-button:has-text('Easy Apply')")
-            apply_btn = desc_page.locator("button.jobs-apply-button")
+            easy_apply_btn = desc_page.locator("button.jobs-apply-button:has-text('Easy Apply'), button:has-text('Easy Apply'), button[aria-label*='Easy Apply']")
+            apply_btn = desc_page.locator("button.jobs-apply-button, button:has-text('Apply'), a:has-text('Apply')")
             
             if await easy_apply_btn.count() > 0:
                 log_message(f"LinkedIn MATCH FOUND ({score}%): {title} at {company}. Clicking Easy Apply...")
                 await easy_apply_btn.first.click()
                 await asyncio.sleep(3)
+                has_doubts = False
                 try:
-                    await auto_fill_playwright_form(desc_page)
+                    await auto_fill_playwright_form(desc_page, job_title=title, company=company, job_url=href, platform="LinkedIn")
+                    with state.DOUBT_LOCK:
+                        has_doubts = any(d.get("type") == "form_question" and d.get("url") == href for d in state.DOUBT_QUEUE)
                 except Exception as e:
                     log_message(f"Auto-fill error: {e}")
-                await wait_for_manual_submission(desc_page)
+                await wait_for_manual_submission(desc_page, has_doubts=has_doubts)
                 save_to_db(href, title, company, "LinkedIn", "Applied")
             elif await apply_btn.count() > 0:
                 # Click standard apply and capture redirect
@@ -529,6 +551,18 @@ async def run_bot_async():
                                     desc_el = desc_page.locator("#jobDescriptionText")
                                     if await desc_el.count() > 0:
                                         desc_text = await desc_el.inner_text()
+                                    
+                                    # Extract recruiter contacts from full page content beyond just description
+                                    try:
+                                        full_page_text = await desc_page.inner_text("body")
+                                        page_contacts = extract_recruiter_contacts(full_page_text)
+                                        if page_contacts["emails"] or page_contacts["phones"] or page_contacts["hr_names"]:
+                                            e_str = page_contacts["emails"][0] if page_contacts["emails"] else ""
+                                            p_str = page_contacts["phones"][0] if page_contacts["phones"] else ""
+                                            hr_str = page_contacts["hr_names"][0] if page_contacts["hr_names"] else "Hiring Manager"
+                                            save_recruiter_contact(company, title, hr_str, e_str, p_str, "Indeed", href)
+                                    except Exception:
+                                        pass
                                         
                                     await process_job_evaluation(title, company, href, desc_text, "Indeed", desc_page, browser)
                                 except Exception as e:
@@ -603,6 +637,18 @@ async def run_bot_async():
                                 desc_el = desc_page.locator(".job-desc, .jd-header-title, #jobDescriptionText")
                                 if await desc_el.count() > 0:
                                     desc_text = await desc_el.inner_text()
+                                
+                                # Extract recruiter contacts from full page content beyond just description
+                                try:
+                                    full_page_text = await desc_page.inner_text("body")
+                                    page_contacts = extract_recruiter_contacts(full_page_text)
+                                    if page_contacts["emails"] or page_contacts["phones"] or page_contacts["hr_names"]:
+                                        e_str = page_contacts["emails"][0] if page_contacts["emails"] else ""
+                                        p_str = page_contacts["phones"][0] if page_contacts["phones"] else ""
+                                        hr_str = page_contacts["hr_names"][0] if page_contacts["hr_names"] else "Hiring Manager"
+                                        save_recruiter_contact(company, title, hr_str, e_str, p_str, "Naukri", href)
+                                except Exception:
+                                    pass
                                     
                                 await process_job_evaluation(title, company, href, desc_text, "Naukri", desc_page, browser)
                             except Exception as e:
@@ -620,7 +666,7 @@ async def run_bot_async():
                         if not state.BOT_RUNNING: break
                         
                         q_encoded = encode_query_for_url(query, 'linkedin')
-                        url = f"https://www.linkedin.com/jobs/search/?keywords={q_encoded}&f_AL=true"
+                        url = f"https://www.linkedin.com/jobs/search/?keywords={q_encoded}"
                         if loc:
                             url += f"&location={get_location_search_term(loc).replace(' ', '%20')}"
                         else:
@@ -650,13 +696,15 @@ async def run_bot_async():
                             continue
                         
                         try:
-                            # Scroll down the listings frame on the left to trigger lazy loading
-                            await page.evaluate("document.querySelector('.jobs-search-results-list')?.scrollTo(0, 1000)")
+                            # Scroll the listings panel multiple times to load more jobs
+                            for scroll_i in range(3):
+                                await page.evaluate("document.querySelector('.jobs-search-results-list')?.scrollTo(0, " + str((scroll_i + 1) * 800) + ")")
+                                await asyncio.sleep(1)
                             await asyncio.sleep(2)
                         except Exception:
                             pass
                             
-                        cards = await page.locator("li.jobs-search-results__list-item, div.job-card-container").all()
+                        cards = await page.locator("li.jobs-search-results__list-item, div.job-card-container, li.scaffold-layout__list-item").all()
                         log_message(f"LinkedIn: Found {len(cards)} listings for '{query}'.")
                         
                         for card in cards[:max_jobs]:
@@ -668,7 +716,7 @@ async def run_bot_async():
                                 await card.click()
                                 await asyncio.sleep(3)
                                 
-                                title_el = card.locator("a.job-card-list__title, .artdeco-entity-lockup__title a")
+                                title_el = card.locator("a.job-card-list__title, .artdeco-entity-lockup__title a, a.job-card-container__link, a[data-control-id]")
                                 if await title_el.count() == 0: continue
                                 title = await title_el.first.inner_text()
                                 href = await title_el.first.get_attribute("href")
@@ -679,7 +727,7 @@ async def run_bot_async():
                                     
                                 if href in APPLIED_URLS_SET: continue
                                 
-                                comp_el = card.locator(".job-card-container__primary-description, .artdeco-entity-lockup__subtitle")
+                                comp_el = card.locator(".job-card-container__primary-description, .artdeco-entity-lockup__subtitle, .job-card-container__company-name")
                                 company = await comp_el.first.inner_text() if await comp_el.count() > 0 else "Unknown Company"
                                 company = company.strip().split("\n")[0]
                                 
@@ -692,9 +740,21 @@ async def run_bot_async():
                                     await asyncio.sleep(3)
                                     
                                     desc_text = ""
-                                    desc_el = desc_page.locator(".jobs-description__content, .jobs-box__html-content, #job-details")
+                                    desc_el = desc_page.locator(".jobs-description__content, .jobs-box__html-content, #job-details, .jobs-description, div[class*='description']")
                                     if await desc_el.count() > 0:
                                         desc_text = await desc_el.first.inner_text()
+                                    
+                                    # Extract recruiter contacts from full page (poster info, sidebar, etc.)
+                                    try:
+                                        full_page_text = await desc_page.inner_text("body")
+                                        page_contacts = extract_recruiter_contacts(full_page_text)
+                                        if page_contacts["emails"] or page_contacts["phones"] or page_contacts["hr_names"]:
+                                            e_str = page_contacts["emails"][0] if page_contacts["emails"] else ""
+                                            p_str = page_contacts["phones"][0] if page_contacts["phones"] else ""
+                                            hr_str = page_contacts["hr_names"][0] if page_contacts["hr_names"] else "Hiring Manager"
+                                            save_recruiter_contact(company, title, hr_str, e_str, p_str, "LinkedIn", href)
+                                    except Exception:
+                                        pass
                                         
                                     await process_job_evaluation(title, company, href, desc_text, "LinkedIn", desc_page, browser)
                                 except Exception as e:
@@ -804,7 +864,7 @@ def apply_single_job_async(job):
             await apply_btn.first.click()
             await asyncio.sleep(3)
             try:
-                await auto_fill_playwright_form(page)
+                await auto_fill_playwright_form(page, job_title=job.get("title", ""), company=job.get("company", ""), job_url=job.get("url", ""), platform=platform)
             except Exception as e:
                 log_message(f"Auto-fill error: {e}")
             updated = update_job_status_in_csv(job["url"], "Approval Needed", "Applied", "Manual Approval Apply")

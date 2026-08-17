@@ -82,6 +82,9 @@ class SuggestionsView(ctk.CTkFrame):
 
         self.btn_mark_applied = create_action_btn(btn_row, "✓ Mark Done", self.mark_suggestion_as_applied, "outline", "small")
         self.btn_mark_applied.pack(side='left')
+
+        self.btn_send_email = create_action_btn(btn_row, "\u2709\ufe0f Send Email", self.send_direct_smtp_email_action, "primary", "small")
+        self.btn_send_email.pack(side='left', padx=(6, 0))
         
         self.load_suggestions_table()
 

@@ -82,6 +82,9 @@ def save_to_db(url, title, company, platform, status, detail=""):
             writer.writerow([url, title, company, platform, status, detail, datetime.now().isoformat()])
         # Update the shared in-memory set so concurrent loops see this URL immediately
         APPLIED_URLS_SET.add(url)
+        # Increment daily session counter for safety cap enforcement
+        if status in ["Applied", "Manual Approval Apply"]:
+            state.SESSION_STATS["applied_today"] = state.SESSION_STATS.get("applied_today", 0) + 1
         recalculate_metrics()
     except Exception as e:
         log_message(f"Error saving to DB: {e}")

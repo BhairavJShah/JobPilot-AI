@@ -6,11 +6,13 @@ __pycache__/
 # Local user configurations & databases (CRITICAL: Do not upload credentials!)
 config.json
 applied_jobs.csv
+recruiter_contacts.csv
 bot_logs.txt
 edge-debug-profile/
 
-# Media & Screenshots
+# Media, Screenshots & Generated Files
 screenshots/
+tailored_resumes/
 *.png
 *.jpg
 *.jpeg
