@@ -31,11 +31,9 @@ def extract_recruiter_contacts(text):
         digits = re.sub(r'\D', '', p)
         # Check digit length suitable for mobile/landline numbers (10 to 13 digits)
         if 10 <= len(digits) <= 13:
-            # Avoid matching timestamps, dates, zip codes or large numbers
-            if not digits.startswith(('202', '201', '200', '199', '198')):
-                formatted_phone = p.strip()
-                if formatted_phone not in valid_phones:
-                    valid_phones.append(formatted_phone)
+            formatted_phone = p.strip()
+            if formatted_phone not in valid_phones:
+                valid_phones.append(formatted_phone)
                     
     # Look for explicit WhatsApp / Phone keywords
     contact_keywords_pattern = r'(?:hr|recruiter|contact|call|whatsapp|ph|phone|mobile|reach us at|connect with)[\s\:\-]*([+\d\s\-\(\)]{10,18})'

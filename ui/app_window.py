@@ -1,6 +1,7 @@
 import os
 import csv
 import json
+import threading
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk
@@ -107,6 +108,20 @@ class AppWindow(ctk.CTk):
         self.show_view('dashboard')
         self.update_gui_loop()
         
+    def _update_ai_status_async(self):
+        def _check():
+            try:
+                status_text, is_online = check_live_ai_status()
+                self.after(0, lambda: self._apply_ai_status(status_text, is_online))
+            except Exception:
+                self.after(0, lambda: self._apply_ai_status("Offline", False))
+        threading.Thread(target=_check, daemon=True).start()
+
+    def _apply_ai_status(self, status_text, is_online):
+        if hasattr(self, 'ind_qwen'):
+            ind_color = C["green"] if is_online else C["red"]
+            self.ind_qwen.configure(text=f"● {status_text}", text_color=ind_color)
+
     def create_top_navbar(self):
         self.top_bar = ctk.CTkFrame(self.container, fg_color=C["card"], corner_radius=12, height=48)
         self.top_bar.pack(fill='x', pady=(0, 16))
@@ -115,12 +130,14 @@ class AppWindow(ctk.CTk):
         status_f = ctk.CTkFrame(self.top_bar, fg_color="transparent")
         status_f.pack(side='left', padx=16, fill='y')
         
-        status_str, is_online = check_live_ai_status()
-        ind_color = C["green"] if is_online else C["red"]
+        status_str = "Checking AI..."
+        ind_color = C["dim"]
         self.ind_qwen = ctk.CTkLabel(status_f, text=f"● {status_str}",
                                      font=F["xs_b"], text_color=ind_color, cursor="hand2")
         self.ind_qwen.pack(side='left', padx=(0, 16), pady=12)
         self.ind_qwen.bind("<Button-1>", lambda e: self.show_view('settings'))
+        
+        self._update_ai_status_async()
         
         self.ind_edge = ctk.CTkLabel(status_f, text="● Edge: Connected",
                                     font=F["xs_b"], text_color=C["dim"])
@@ -148,16 +165,7 @@ class AppWindow(ctk.CTk):
 
     def refresh_nav_buttons(self):
         doubt_count = len(state.DOUBT_QUEUE)
-        sug_count = 0
-        if os.path.exists(APPLIED_DB_PATH):
-            try:
-                with open(APPLIED_DB_PATH, mode='r', encoding='utf-8') as f:
-                    reader = csv.reader(f)
-                    next(reader, None)
-                    for row in reader:
-                        if row and len(row) >= 5 and row[4] == "Suggested":
-                            sug_count += 1
-            except Exception: pass
+        sug_count = getattr(state, 'SUGGESTION_COUNT', 0)
 
         nav_labels = {
             'dashboard':   ('⊞', 'Dashboard'),
@@ -217,14 +225,13 @@ class AppWindow(ctk.CTk):
                 
             self.after(10, self.reload_all_views)
         except Exception as e:
-            print(f"Error executing chat command: {e}")
+            from core.db_manager import log_message
+            log_message(f"Error executing chat command: {e}")
 
     def reload_all_views(self):
         self.views['settings'].reload_view_data()
         self.views['profile'].reload_profile_fields()
-        status_str, is_online = check_live_ai_status()
-        ind_color = C["green"] if is_online else C["red"]
-        self.ind_qwen.configure(text=f"● {status_str}", text_color=ind_color)
+        self._update_ai_status_async()
         recalculate_metrics()
         self.refresh_nav_buttons()
 

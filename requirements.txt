@@ -3,3 +3,4 @@ playwright==1.45.0
 pypdf==4.2.0
 reportlab>=4.0
 python-jobspy>=1.1
+keyring>=24.0.0

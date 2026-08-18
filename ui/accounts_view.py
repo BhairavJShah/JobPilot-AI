@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import messagebox
 from core.config_manager import CONFIG, CONFIG_PATH
 from core.db_manager import log_message, recalculate_metrics
+from core.credential_store import get_credential, store_credential
 from ui.components import C, F, add_grid_input, create_action_btn, add_section_divider
 
 class AccountsView(ctk.CTkFrame):
@@ -53,16 +54,16 @@ class AccountsView(ctk.CTkFrame):
         
         # Populate
         self.indeed_user.insert(0, CONFIG["accounts"].get("indeed_email", ""))
-        self.indeed_pass.insert(0, CONFIG["accounts"].get("indeed_pass", ""))
+        self.indeed_pass.insert(0, get_credential("accounts.indeed_pass"))
         self.naukri_user.insert(0, CONFIG["accounts"].get("naukri_email", ""))
-        self.naukri_pass.insert(0, CONFIG["accounts"].get("naukri_pass", ""))
+        self.naukri_pass.insert(0, get_credential("accounts.naukri_pass"))
         self.linkedin_user.insert(0, CONFIG["accounts"].get("linkedin_email", ""))
-        self.linkedin_pass.insert(0, CONFIG["accounts"].get("linkedin_pass", ""))
+        self.linkedin_pass.insert(0, get_credential("accounts.linkedin_pass"))
         
         self.smtp_server.insert(0, CONFIG.get("smtp", {}).get("server", ""))
         self.smtp_port.insert(0, CONFIG.get("smtp", {}).get("port", ""))
         self.smtp_email.insert(0, CONFIG.get("smtp", {}).get("email", ""))
-        self.smtp_password.insert(0, CONFIG.get("smtp", {}).get("password", ""))
+        self.smtp_password.insert(0, get_credential("smtp.password"))
         
         # ── Save Button ──
         btn_frame = ctk.CTkFrame(card, fg_color="transparent")
@@ -73,22 +74,28 @@ class AccountsView(ctk.CTkFrame):
     def save_accounts_action(self):
         try:
             CONFIG["accounts"]["indeed_email"] = self.indeed_user.get().strip()
-            CONFIG["accounts"]["indeed_pass"] = self.indeed_pass.get().strip()
             CONFIG["accounts"]["naukri_email"] = self.naukri_user.get().strip()
-            CONFIG["accounts"]["naukri_pass"] = self.naukri_pass.get().strip()
             CONFIG["accounts"]["linkedin_email"] = self.linkedin_user.get().strip()
-            CONFIG["accounts"]["linkedin_pass"] = self.linkedin_pass.get().strip()
+            # Store passwords in secure OS keyring, NOT in config.json
+            store_credential("accounts.indeed_pass", self.indeed_pass.get().strip())
+            store_credential("accounts.naukri_pass", self.naukri_pass.get().strip())
+            store_credential("accounts.linkedin_pass", self.linkedin_pass.get().strip())
+            # Blank out passwords in config dict (they live in keyring now)
+            CONFIG["accounts"]["indeed_pass"] = ""
+            CONFIG["accounts"]["naukri_pass"] = ""
+            CONFIG["accounts"]["linkedin_pass"] = ""
             
             if "smtp" not in CONFIG: CONFIG["smtp"] = {}
             CONFIG["smtp"]["server"] = self.smtp_server.get().strip()
             CONFIG["smtp"]["port"] = self.smtp_port.get().strip()
             CONFIG["smtp"]["email"] = self.smtp_email.get().strip()
-            CONFIG["smtp"]["password"] = self.smtp_password.get().strip()
+            store_credential("smtp.password", self.smtp_password.get().strip())
+            CONFIG["smtp"]["password"] = ""  # Blank out in config
             
             with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
                 json.dump(CONFIG, f, indent=4)
-            messagebox.showinfo("Success", "Account credentials & SMTP server saved!")
-            log_message("Credentials & SMTP settings saved via Desktop GUI.")
+            messagebox.showinfo("Success", "Account credentials & SMTP server saved securely!")
+            log_message("Credentials saved to secure store & SMTP settings saved via Desktop GUI.")
             recalculate_metrics()
             self.controller.refresh_nav_buttons()
         except Exception as e:

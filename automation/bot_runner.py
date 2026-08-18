@@ -9,6 +9,7 @@ import core.state as state
 from core.config_manager import CONFIG, get_location_search_term, encode_query_for_url, SCREENSHOTS_DIR
 from core.db_manager import log_message, save_to_db, load_applied_urls, recalculate_metrics, APPLIED_URLS_SET, init_applied_urls, update_job_status_in_csv, save_recruiter_contact
 from core.contact_extractor import extract_recruiter_contacts
+from core.credential_store import get_credential
 from automation.llm_evaluator import evaluate_job_with_qwen
 from automation.form_autofiller import auto_fill_playwright_form
 from automation.job_scraper import fast_scrape_jobs
@@ -90,7 +91,7 @@ async def verify_naukri_auth(page):
         login_btn = page.locator("a#login_Layer")
         if await login_btn.count() > 0:
             email = CONFIG.get("accounts", {}).get("naukri_email", "")
-            password = CONFIG.get("accounts", {}).get("naukri_pass", "")
+            password = get_credential("accounts.naukri_pass")
             if email and password:
                 log_message("Attempting automatic login to Naukri...")
                 try:
@@ -136,7 +137,7 @@ async def verify_linkedin_auth(page):
         
         if "feed" not in page.url:
             email = CONFIG.get("accounts", {}).get("linkedin_email", "")
-            password = CONFIG.get("accounts", {}).get("linkedin_pass", "")
+            password = get_credential("accounts.linkedin_pass")
             if email and password:
                 log_message("Attempting automatic login to LinkedIn...")
                 try:
@@ -221,7 +222,7 @@ async def process_job_evaluation(title, company, href, desc_text, platform, desc
     if await check_safety_limit():
         return False
     
-    contacts = extract_recruiter_contacts(desc_text)
+    contacts = await asyncio.to_thread(extract_recruiter_contacts, desc_text)
     email_matches = contacts["emails"]
     phone_matches = contacts["phones"]
     hr_matches = contacts["hr_names"]
@@ -234,7 +235,7 @@ async def process_job_evaluation(title, company, href, desc_text, platform, desc
         save_recruiter_contact(company, title, hr_str, e_str, p_str, platform, href)
         
     try:
-        eval_res = evaluate_job_with_qwen(title, desc_text)
+        eval_res = await asyncio.to_thread(evaluate_job_with_qwen, title, desc_text)
         if eval_res is None:
             eval_res = {}
     except Exception as e:
@@ -482,6 +483,7 @@ async def run_bot_async():
                         
                         q_encoded = encode_query_for_url(search_query, 'indeed')
                         
+                        jobs_processed = 0
                         # Pagination up to 3 pages
                         for page_num in range(3):
                             if not state.BOT_RUNNING: break
@@ -521,7 +523,6 @@ async def run_bot_async():
                             if len(cards) == 0:
                                 break # No more jobs
                                 
-                            jobs_processed = 0
                             for card in cards:
                                 await check_pause()
                                 if not state.BOT_RUNNING: break
@@ -555,7 +556,7 @@ async def run_bot_async():
                                     # Extract recruiter contacts from full page content beyond just description
                                     try:
                                         full_page_text = await desc_page.inner_text("body")
-                                        page_contacts = extract_recruiter_contacts(full_page_text)
+                                        page_contacts = await asyncio.to_thread(extract_recruiter_contacts, full_page_text)
                                         if page_contacts["emails"] or page_contacts["phones"] or page_contacts["hr_names"]:
                                             e_str = page_contacts["emails"][0] if page_contacts["emails"] else ""
                                             p_str = page_contacts["phones"][0] if page_contacts["phones"] else ""
@@ -570,8 +571,6 @@ async def run_bot_async():
                                 finally:
                                     await desc_page.close()
                                 await human_delay()
-                            if jobs_processed == 0:
-                                break # No jobs found on this page, stop paginating
 
             # Naukri automation loop task
             async def run_naukri_loop(page):
@@ -641,7 +640,7 @@ async def run_bot_async():
                                 # Extract recruiter contacts from full page content beyond just description
                                 try:
                                     full_page_text = await desc_page.inner_text("body")
-                                    page_contacts = extract_recruiter_contacts(full_page_text)
+                                    page_contacts = await asyncio.to_thread(extract_recruiter_contacts, full_page_text)
                                     if page_contacts["emails"] or page_contacts["phones"] or page_contacts["hr_names"]:
                                         e_str = page_contacts["emails"][0] if page_contacts["emails"] else ""
                                         p_str = page_contacts["phones"][0] if page_contacts["phones"] else ""
@@ -747,7 +746,7 @@ async def run_bot_async():
                                     # Extract recruiter contacts from full page (poster info, sidebar, etc.)
                                     try:
                                         full_page_text = await desc_page.inner_text("body")
-                                        page_contacts = extract_recruiter_contacts(full_page_text)
+                                        page_contacts = await asyncio.to_thread(extract_recruiter_contacts, full_page_text)
                                         if page_contacts["emails"] or page_contacts["phones"] or page_contacts["hr_names"]:
                                             e_str = page_contacts["emails"][0] if page_contacts["emails"] else ""
                                             p_str = page_contacts["phones"][0] if page_contacts["phones"] else ""
@@ -774,7 +773,7 @@ async def run_bot_async():
                     
                     log_message(f"Web Scanner: Searching broader web for '{query}'...")
                     try:
-                        scraped = fast_scrape_jobs(query=query, limit=10)
+                        scraped = await asyncio.to_thread(fast_scrape_jobs, query=query, limit=10)
                         log_message(f"Web Scanner: Discovered {len(scraped)} web career listings for '{query}'.")
                         
                         for item in scraped:

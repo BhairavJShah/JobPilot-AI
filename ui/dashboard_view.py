@@ -228,17 +228,7 @@ class DashboardView(ctk.CTkFrame):
             self.chart_canvas.create_text(cx, cy, text=f"{total}\nTotal", fill=C["text"], font=F["xs_b"])
 
         # Platforms Bar
-        plats = {"Indeed": 0, "Naukri": 0, "LinkedIn": 0}
-        if os.path.exists(APPLIED_DB_PATH):
-            try:
-                with open(APPLIED_DB_PATH, mode='r', encoding='utf-8') as f:
-                    reader = csv.reader(f)
-                    next(reader, None)
-                    for row in reader:
-                        if row and len(row) >= 5 and row[4] in ["Applied", "Manual Approval Apply"]:
-                            p = row[3]
-                            if p in plats: plats[p] += 1
-            except Exception: pass
+        plats = state.METRICS.get("platforms", {"Indeed": 0, "Naukri": 0, "LinkedIn": 0})
             
         max_val = max(list(plats.values()) + [1])
         bx, by, bw, bh = 220, 120, 42, 70
@@ -267,7 +257,7 @@ class DashboardView(ctk.CTkFrame):
         self.chat_history.see('end')
         self.chat_input.delete(0, 'end')
         
-        def update_chat_ui(reply, command_data):
+        def update_chat_ui(reply, commands):
             self.chat_history.configure(state='normal')
             hist_content = self.chat_history.get('1.0', 'end')
             thinking_idx = hist_content.rfind("AI: Thinking...")
@@ -280,8 +270,9 @@ class DashboardView(ctk.CTkFrame):
             self.chat_history.configure(state='disabled')
             self.chat_history.see('end')
             
-            if command_data:
-                self.controller.execute_chat_command(command_data)
+            if commands:
+                for cmd in commands:
+                    self.controller.execute_chat_command(cmd)
 
         def generate_response():
             self.after(0, lambda: self._show_thinking())
@@ -340,15 +331,15 @@ Instructions:
 """
             reply = query_ai_model(prompt)
             
-            command_data = None
-            match_cmd = re.search(r'\[COMMAND:\s*(.*?)\]', reply, re.DOTALL)
-            if match_cmd:
+            commands = []
+            for match_cmd in re.finditer(r'\[COMMAND:\s*(.*?)\]', reply, re.DOTALL):
                 try:
-                    command_data = json.loads(match_cmd.group(1).strip())
+                    cmd_json = json.loads(match_cmd.group(1).strip())
+                    commands.append(cmd_json)
                     reply = reply.replace(match_cmd.group(0), "").strip()
                 except Exception: pass
             
-            self.after(0, lambda: update_chat_ui(reply, command_data))
+            self.after(0, lambda: update_chat_ui(reply, commands))
                 
         threading.Thread(target=generate_response, daemon=True).start()
 

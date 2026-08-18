@@ -1,6 +1,8 @@
 import os
 import json
 import urllib.parse
+import copy
+from core.credential_store import get_credential, migrate_plaintext_credentials
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
@@ -94,7 +96,7 @@ CONFIG = {}
 def load_config():
     global CONFIG
     if not os.path.exists(CONFIG_PATH):
-        CONFIG = dict(DEFAULT_CONFIG)
+        CONFIG = copy.deepcopy(DEFAULT_CONFIG)
         save_config()
     else:
         try:
@@ -109,8 +111,11 @@ def load_config():
                             if k not in CONFIG[category]:
                                 CONFIG[category][k] = v
         except Exception:
-            CONFIG = dict(DEFAULT_CONFIG)
+            CONFIG = copy.deepcopy(DEFAULT_CONFIG)
             save_config()
+    # Migrate any plaintext credentials to secure storage
+    if migrate_plaintext_credentials(CONFIG):
+        save_config()  # Save config with blanked-out passwords
     return CONFIG
 
 def save_config():
@@ -172,9 +177,9 @@ def get_cloud_ai_config():
         "base_url": s.get("cloud_ai_base_url", "https://api.openai.com/v1").strip(),
         "model": s.get("cloud_ai_model", "gpt-4o-mini").strip(),
         "auth_type": s.get("cloud_ai_auth_type", "api_key"),
-        "api_key": s.get("cloud_ai_api_key", "").strip(),
-        "username": s.get("cloud_ai_username", "").strip(),
-        "password": s.get("cloud_ai_password", "").strip()
+        "api_key": get_credential("settings.cloud_ai_api_key", s.get("cloud_ai_api_key", "")).strip(),
+        "username": get_credential("settings.cloud_ai_username", s.get("cloud_ai_username", "")).strip(),
+        "password": get_credential("settings.cloud_ai_password", s.get("cloud_ai_password", "")).strip()
     }
 
 def get_active_model_display():

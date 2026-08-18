@@ -315,7 +315,7 @@ async def auto_fill_playwright_form(page, job_title="", company="", job_url="", 
                         if not opt_label:
                             # Try sibling label text
                             try:
-                                parent = opt.locator("..")
+                                parent = opt.locator("xpath=..")
                                 parent_text = await parent.inner_text()
                                 opt_label = parent_text.strip()
                             except Exception:

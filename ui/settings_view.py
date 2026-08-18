@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import messagebox
 from core.config_manager import CONFIG, CONFIG_PATH, LOCATION_DATA, get_installed_ollama_models
 from core.db_manager import log_message, recalculate_metrics
+from core.credential_store import get_credential, store_credential
 from ui.components import C, F, TagChipContainer, add_form_input, create_action_btn, add_section_divider
 
 class SettingsView(ctk.CTkFrame):
@@ -135,7 +136,7 @@ class SettingsView(ctk.CTkFrame):
         self.entry_cloud_key = ctk.CTkEntry(self.f_key_sub, fg_color=C["input"], border_color=C["border"],
                                            text_color=C["text"], font=F["sm"], corner_radius=8, height=36, show="*")
         self.entry_cloud_key.pack(fill='x')
-        self.entry_cloud_key.insert(0, CONFIG["settings"].get("cloud_ai_api_key", CONFIG["settings"].get("gemini_api_key", "")))
+        self.entry_cloud_key.insert(0, get_credential("settings.cloud_ai_api_key", CONFIG["settings"].get("cloud_ai_api_key", CONFIG["settings"].get("gemini_api_key", ""))))
 
         # Username & Password Frame
         self.f_userpass_sub = ctk.CTkFrame(self.f_cloud_sub, fg_color="transparent")
@@ -150,7 +151,7 @@ class SettingsView(ctk.CTkFrame):
         self.entry_cloud_user = ctk.CTkEntry(f_u, fg_color=C["input"], border_color=C["border"],
                                             text_color=C["text"], font=F["xs"], corner_radius=8, height=36)
         self.entry_cloud_user.pack(fill='x')
-        self.entry_cloud_user.insert(0, CONFIG["settings"].get("cloud_ai_username", ""))
+        self.entry_cloud_user.insert(0, get_credential("settings.cloud_ai_username", CONFIG["settings"].get("cloud_ai_username", "")))
         
         f_p = ctk.CTkFrame(up_grid, fg_color="transparent")
         f_p.grid(row=0, column=1, sticky='ew', padx=(6, 0))
@@ -158,7 +159,7 @@ class SettingsView(ctk.CTkFrame):
         self.entry_cloud_pass = ctk.CTkEntry(f_p, fg_color=C["input"], border_color=C["border"],
                                             text_color=C["text"], font=F["xs"], corner_radius=8, height=36, show="*")
         self.entry_cloud_pass.pack(fill='x')
-        self.entry_cloud_pass.insert(0, CONFIG["settings"].get("cloud_ai_password", ""))
+        self.entry_cloud_pass.insert(0, get_credential("settings.cloud_ai_password", CONFIG["settings"].get("cloud_ai_password", "")))
         
         btn_test_cloud = create_action_btn(self.f_cloud_sub, "⚡ Test Connection", self.test_cloud_connection, "success", "small")
         btn_test_cloud.pack(anchor='w', pady=(10, 0))
@@ -381,28 +382,32 @@ class SettingsView(ctk.CTkFrame):
             messagebox.showerror("Error", "Please enter an API Key / Token.")
             return
             
-        import urllib.request
-        import base64
-        headers = {'Content-Type': 'application/json'}
-        if atype == "user_pass" or (uname and passwd and not key):
-            up = f"{uname}:{passwd}".encode('utf-8')
-            headers['Authorization'] = f"Basic {base64.b64encode(up).decode('utf-8')}"
-        elif key:
-            if "generativelanguage.googleapis.com" in url:
-                headers['x-goog-api-key'] = key
-            else:
-                headers['Authorization'] = f"Bearer {key}"
+        def _do_test():
+            import urllib.request
+            import base64
+            headers = {'Content-Type': 'application/json'}
+            if atype == "user_pass" or (uname and passwd and not key):
+                up = f"{uname}:{passwd}".encode('utf-8')
+                headers['Authorization'] = f"Basic {base64.b64encode(up).decode('utf-8')}"
+            elif key:
+                if "generativelanguage.googleapis.com" in url:
+                    headers['x-goog-api-key'] = key
+                else:
+                    headers['Authorization'] = f"Bearer {key}"
+                    
+            endpoint = f"{url.rstrip('/')}/models/{model}:generateContent" if "generativelanguage.googleapis.com" in url else (f"{url.rstrip('/')}/chat/completions" if not url.endswith("/chat/completions") else url)
+            payload = {"contents": [{"parts": [{"text": "Hello"}]}]} if "generativelanguage.googleapis.com" in url else {"model": model, "messages": [{"role": "user", "content": "Hello"}]}
+            
+            try:
+                req = urllib.request.Request(endpoint, data=json.dumps(payload).encode('utf-8'), headers=headers)
+                with urllib.request.urlopen(req, timeout=12) as resp:
+                    res = json.loads(resp.read().decode('utf-8'))
+                    self.after(0, lambda: messagebox.showinfo("Success", f"Cloud AI ({model}) connected successfully!"))
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror("Connection Error", f"Cloud AI test failed: {e}"))
                 
-        endpoint = f"{url.rstrip('/')}/models/{model}:generateContent" if "generativelanguage.googleapis.com" in url else (f"{url.rstrip('/')}/chat/completions" if not url.endswith("/chat/completions") else url)
-        payload = {"contents": [{"parts": [{"text": "Hello"}]}]} if "generativelanguage.googleapis.com" in url else {"model": model, "messages": [{"role": "user", "content": "Hello"}]}
-        
-        try:
-            req = urllib.request.Request(endpoint, data=json.dumps(payload).encode('utf-8'), headers=headers)
-            with urllib.request.urlopen(req, timeout=12) as resp:
-                res = json.loads(resp.read().decode('utf-8'))
-                messagebox.showinfo("Success", f"Cloud AI ({model}) connected successfully!")
-        except Exception as e:
-            messagebox.showerror("Connection Error", f"Cloud AI test failed: {e}")
+        import threading
+        threading.Thread(target=_do_test, daemon=True).start()
 
     def refresh_models(self):
         models = get_installed_ollama_models()
@@ -486,9 +491,12 @@ class SettingsView(ctk.CTkFrame):
             CONFIG["settings"]["cloud_ai_base_url"] = self.entry_cloud_url.get().strip()
             CONFIG["settings"]["cloud_ai_model"] = self.entry_cloud_model.get().strip()
             CONFIG["settings"]["cloud_ai_auth_type"] = "user_pass" if "Username" in self.seg_auth.get() else "api_key"
-            CONFIG["settings"]["cloud_ai_api_key"] = self.entry_cloud_key.get().strip()
-            CONFIG["settings"]["cloud_ai_username"] = self.entry_cloud_user.get().strip()
-            CONFIG["settings"]["cloud_ai_password"] = self.entry_cloud_pass.get().strip()
+            store_credential("settings.cloud_ai_api_key", self.entry_cloud_key.get().strip())
+            store_credential("settings.cloud_ai_username", self.entry_cloud_user.get().strip())
+            store_credential("settings.cloud_ai_password", self.entry_cloud_pass.get().strip())
+            CONFIG["settings"]["cloud_ai_api_key"] = ""
+            CONFIG["settings"]["cloud_ai_username"] = ""
+            CONFIG["settings"]["cloud_ai_password"] = ""
             
             with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
                 json.dump(CONFIG, f, indent=4)
@@ -517,9 +525,9 @@ class SettingsView(ctk.CTkFrame):
         auth_val = CONFIG["settings"].get("cloud_ai_auth_type", "api_key")
         self.seg_auth.set("Username & Password (Basic Auth)" if auth_val == "user_pass" else "API Key / Bearer Token")
         
-        self.entry_cloud_key.delete(0, 'end'); self.entry_cloud_key.insert(0, CONFIG["settings"].get("cloud_ai_api_key", CONFIG["settings"].get("gemini_api_key", "")))
-        self.entry_cloud_user.delete(0, 'end'); self.entry_cloud_user.insert(0, CONFIG["settings"].get("cloud_ai_username", ""))
-        self.entry_cloud_pass.delete(0, 'end'); self.entry_cloud_pass.insert(0, CONFIG["settings"].get("cloud_ai_password", ""))
+        self.entry_cloud_key.delete(0, 'end'); self.entry_cloud_key.insert(0, get_credential("settings.cloud_ai_api_key", CONFIG["settings"].get("cloud_ai_api_key", CONFIG["settings"].get("gemini_api_key", ""))))
+        self.entry_cloud_user.delete(0, 'end'); self.entry_cloud_user.insert(0, get_credential("settings.cloud_ai_username", CONFIG["settings"].get("cloud_ai_username", "")))
+        self.entry_cloud_pass.delete(0, 'end'); self.entry_cloud_pass.insert(0, get_credential("settings.cloud_ai_password", CONFIG["settings"].get("cloud_ai_password", "")))
         
         self.on_provider_changed(self.seg_provider.get())
         self.on_auth_type_changed(self.seg_auth.get())

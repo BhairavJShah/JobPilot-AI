@@ -9,6 +9,43 @@ from core.config_manager import CONFIG, BASE_DIR
 from core.resume_parser import extract_resume_text
 from automation.llm_evaluator import query_ai_model
 from core.db_manager import log_message
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+import os as _os
+
+# Try to register a Unicode-capable font
+_UNICODE_FONT = 'Helvetica'  # fallback
+try:
+    # Try common Windows fonts
+    for _font_path in [
+        _os.path.join(_os.environ.get('WINDIR', 'C:\\Windows'), 'Fonts', 'arial.ttf'),
+        _os.path.join(_os.environ.get('WINDIR', 'C:\\Windows'), 'Fonts', 'segoeui.ttf'),
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+        '/System/Library/Fonts/Helvetica.ttc',
+    ]:
+        if _os.path.exists(_font_path):
+            pdfmetrics.registerFont(TTFont('UnicodeFont', _font_path))
+            _UNICODE_FONT = 'UnicodeFont'
+            break
+except Exception:
+    pass
+
+def _extract_json(text):
+    start = text.find('{')
+    if start == -1:
+        return None
+    depth = 0
+    for i, ch in enumerate(text[start:], start):
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(text[start:i+1])
+                except json.JSONDecodeError:
+                    return None
+    return None
 
 RESUMES_OUTPUT_DIR = os.path.join(BASE_DIR, "tailored_resumes")
 os.makedirs(RESUMES_OUTPUT_DIR, exist_ok=True)
@@ -70,10 +107,8 @@ Respond ONLY with JSON format:
     ]
     
     try:
-        import re
-        match = re.search(r'\{.*\}', reply, re.DOTALL)
-        if match:
-            parsed = json.loads(match.group(0))
+        parsed = _extract_json(reply)
+        if parsed:
             summary = parsed.get("summary", summary)
             skills_list = parsed.get("tailored_skills", skills_list)
             bullets = parsed.get("bullet_points", bullets)
@@ -90,16 +125,16 @@ Respond ONLY with JSON format:
     doc = SimpleDocTemplate(pdf_path, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
     styles = getSampleStyleSheet()
     
-    title_style = ParagraphStyle('NameTitle', parent=styles['Heading1'], fontSize=22, leading=26, textColor=colors.HexColor('#0f172a'), fontName='Helvetica-Bold')
-    contact_style = ParagraphStyle('ContactInfo', parent=styles['Normal'], fontSize=9, leading=12, textColor=colors.HexColor('#475569'))
-    heading_style = ParagraphStyle('SectionHeading', parent=styles['Heading2'], fontSize=12, leading=16, textColor=colors.HexColor('#2563eb'), fontName='Helvetica-Bold', spaceBefore=12, spaceAfter=4)
-    body_style = ParagraphStyle('BodyTextCustom', parent=styles['Normal'], fontSize=10, leading=14, textColor=colors.HexColor('#1e293b'))
-    bullet_style = ParagraphStyle('BulletCustom', parent=styles['Normal'], fontSize=10, leading=14, textColor=colors.HexColor('#334155'), leftIndent=12, firstLineIndent=-8, spaceAfter=4)
+    title_style = ParagraphStyle('NameTitle', parent=styles['Heading1'], fontSize=22, leading=26, textColor=colors.HexColor('#0f172a'), fontName=_UNICODE_FONT)
+    contact_style = ParagraphStyle('ContactInfo', parent=styles['Normal'], fontSize=9, leading=12, textColor=colors.HexColor('#475569'), fontName=_UNICODE_FONT)
+    heading_style = ParagraphStyle('SectionHeading', parent=styles['Heading2'], fontSize=12, leading=16, textColor=colors.HexColor('#2563eb'), fontName=_UNICODE_FONT, spaceBefore=12, spaceAfter=4)
+    body_style = ParagraphStyle('BodyTextCustom', parent=styles['Normal'], fontSize=10, leading=14, textColor=colors.HexColor('#1e293b'), fontName=_UNICODE_FONT)
+    bullet_style = ParagraphStyle('BulletCustom', parent=styles['Normal'], fontSize=10, leading=14, textColor=colors.HexColor('#334155'), leftIndent=12, firstLineIndent=-8, spaceAfter=4, fontName=_UNICODE_FONT)
     
     elements = []
     
     # Header Name
-    elements.append(Paragraph(cand_name, title_style))
+    elements.append(Paragraph(f"<b>{cand_name}</b>", title_style))
     contact_str = f"Email: {cand_email}  |  Phone: {cand_phone}"
     if cand_linkedin: contact_str += f"  |  LinkedIn: {cand_linkedin}"
     if cand_github: contact_str += f"  |  GitHub: {cand_github}"
@@ -108,18 +143,18 @@ Respond ONLY with JSON format:
     elements.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#2563eb'), spaceAfter=10))
     
     # Professional Summary
-    elements.append(Paragraph("PROFESSIONAL SUMMARY", heading_style))
+    elements.append(Paragraph("<b>PROFESSIONAL SUMMARY</b>", heading_style))
     elements.append(Paragraph(summary, body_style))
     elements.append(Spacer(1, 8))
     
     # Technical Skills
-    elements.append(Paragraph("TECHNICAL SKILLS", heading_style))
+    elements.append(Paragraph("<b>TECHNICAL SKILLS</b>", heading_style))
     skills_str = ", ".join(skills_list)
     elements.append(Paragraph(skills_str, body_style))
     elements.append(Spacer(1, 8))
     
     # Key Achievements & Experience Highlights
-    elements.append(Paragraph(f"KEY HIGHLIGHTS ({job_title.upper()})", heading_style))
+    elements.append(Paragraph(f"<b>KEY HIGHLIGHTS ({job_title.upper()})</b>", heading_style))
     for b in bullets:
         elements.append(Paragraph(f"•  {b}", bullet_style))
         

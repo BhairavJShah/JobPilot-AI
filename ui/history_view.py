@@ -70,7 +70,10 @@ class HistoryView(ctk.CTkFrame):
         export_path = os.path.join(downloads_folder, f"applied_jobs_{timestamp}.csv")
         
         try:
-            shutil.copy2(APPLIED_DB_PATH, export_path)
+            with open(APPLIED_DB_PATH, 'r', encoding='utf-8') as src:
+                content = src.read()
+            with open(export_path, 'w', encoding='utf-8') as dst:
+                dst.write(content)
             messagebox.showinfo("Export Successful", f"History exported to:\n{export_path}")
         except Exception as e:
             messagebox.showerror("Export Failed", f"Could not export CSV:\n{e}")

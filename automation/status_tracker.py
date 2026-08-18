@@ -29,7 +29,7 @@ async def run_application_status_tracker():
         
     try:
         log_message("TRACKER: Fetching live status updates from platforms...")
-        applied_urls = load_applied_urls()
+        applied_urls = await asyncio.to_thread(load_applied_urls)
         if not applied_urls:
             log_message("TRACKER: No jobs in database to track status.")
             return
@@ -80,7 +80,7 @@ async def run_application_status_tracker():
                                     href = await links.first.get_attribute("href")
                                     if href:
                                         full_url = "https://in.indeed.com" + href if href.startswith("/") else href
-                                        update_job_status_in_csv(full_url, "Applied", status_update, "Updated via Indeed portal sync")
+                                        await asyncio.to_thread(update_job_status_in_csv, full_url, "Applied", status_update, "Updated via Indeed portal sync")
                         except Exception:
                             continue
                 except Exception as e:

@@ -153,6 +153,24 @@ def query_ai_model(prompt):
     else:
         return query_local_qwen(prompt)
 
+def _extract_json_from_text(text):
+    """Extract the first valid JSON object from text using brace-depth counting."""
+    start = text.find('{')
+    if start == -1:
+        return None
+    depth = 0
+    for i, ch in enumerate(text[start:], start):
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(text[start:i+1])
+                except json.JSONDecodeError:
+                    return None
+    return None
+
 def evaluate_job_with_qwen(job_title, job_description):
     """
     Evaluates job relevance using the active AI provider (Local Ollama or Cloud REST API).
@@ -194,9 +212,9 @@ Respond ONLY with valid JSON.
     reply = query_ai_model(prompt)
     
     try:
-        match = re.search(r'\{.*\}', reply, re.DOTALL)
-        if match:
-            return json.loads(match.group(0))
+        match_obj = _extract_json_from_text(reply)
+        if match_obj:
+            return match_obj
     except Exception as e:
         log_message(f"Error parsing AI response JSON: {e}")
         

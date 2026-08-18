@@ -6,6 +6,7 @@ from email.mime.base import MIMEBase
 from email import encoders
 from core.config_manager import CONFIG
 from core.db_manager import log_message
+from core.credential_store import get_credential
 
 def send_smtp_email(to_email, subject, body, attachment_path):
     server_addr = CONFIG.get("smtp", {}).get("server", "smtp.gmail.com")
@@ -14,7 +15,7 @@ def send_smtp_email(to_email, subject, body, attachment_path):
     except (ValueError, TypeError):
         port = 587
     from_email = CONFIG.get("smtp", {}).get("email", "")
-    password = CONFIG.get("smtp", {}).get("password", "")
+    password = get_credential("smtp.password", CONFIG.get("smtp", {}).get("password", ""))
     
     if not from_email or not password:
         raise ValueError("SMTP credentials are not configured in settings.")
@@ -37,7 +38,15 @@ def send_smtp_email(to_email, subject, body, attachment_path):
             )
             msg.attach(part)
             
-    with smtplib.SMTP(server_addr, port) as server:
-        server.starttls()
-        server.login(from_email, password)
-        server.send_message(msg)
+    try:
+        if port == 465:
+            with smtplib.SMTP_SSL(server_addr, port) as server:
+                server.login(from_email, password)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(server_addr, port) as server:
+                server.starttls()
+                server.login(from_email, password)
+                server.send_message(msg)
+    except Exception as e:
+        log_message(f"Error sending email: {e}")
