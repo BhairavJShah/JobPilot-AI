@@ -183,12 +183,13 @@ def load_applied_urls():
         return set()
     urls = set()
     try:
-        with open(APPLIED_DB_PATH, mode='r', encoding='utf-8') as f:
-            reader = csv.reader(f)
-            next(reader, None)
-            for row in reader:
-                if row:
-                    urls.add(row[0])
+        with DB_LOCK:
+            with open(APPLIED_DB_PATH, mode='r', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                next(reader, None)
+                for row in reader:
+                    if row:
+                        urls.add(row[0])
     except Exception as e:
         log_message(f"Error loading applied DB: {e}")
     return urls

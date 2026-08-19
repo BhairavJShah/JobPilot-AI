@@ -110,8 +110,10 @@ Respond ONLY with JSON format:
         parsed = _extract_json(reply)
         if parsed:
             summary = parsed.get("summary", summary)
-            skills_list = parsed.get("tailored_skills", skills_list)
-            bullets = parsed.get("bullet_points", bullets)
+            ai_skills = parsed.get("tailored_skills", skills_list)
+            skills_list = ai_skills if isinstance(ai_skills, list) else [s.strip() for s in str(ai_skills).split(",")]
+            ai_bullets = parsed.get("bullet_points", bullets)
+            bullets = ai_bullets if isinstance(ai_bullets, list) else [str(ai_bullets)]
     except Exception as e:
         log_message(f"AI JSON parse notice (using fallback): {e}")
 

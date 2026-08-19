@@ -138,7 +138,7 @@ Rules:
 Answer:"""
 
     try:
-        reply = query_ai_model(prompt)
+        reply = await asyncio.to_thread(query_ai_model, prompt)
         answer = reply.strip().split("\n")[0].strip()  # Take first line only
         if answer and answer.upper() != "UNSURE":
             return answer

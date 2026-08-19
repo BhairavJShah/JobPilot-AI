@@ -396,7 +396,6 @@ def get_edge_executable_path():
     return None
 
 async def run_bot_async():
-    global CURRENT_STATUS
     log_message("Starting Local Job Bot Loop...")
     init_applied_urls()
     
@@ -901,7 +900,7 @@ def apply_single_job_async(job):
                     user_data_dir = os.path.join(os.path.expanduser("~"), "edge-debug-profile")
                     browser = await p.chromium.launch_persistent_context(
                         user_data_dir,
-                        executable_path=r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+                        executable_path=get_edge_executable_path(),
                         headless=False
                     )
                     page = browser.pages[0] if browser.pages else await browser.new_page()
