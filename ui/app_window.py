@@ -112,9 +112,9 @@ class AppWindow(ctk.CTk):
         def _check():
             try:
                 status_text, is_online = check_live_ai_status()
-                self.after(0, lambda: self._apply_ai_status(status_text, is_online))
+                self._pending_ai_status = (status_text, is_online)
             except Exception:
-                self.after(0, lambda: self._apply_ai_status("Offline", False))
+                self._pending_ai_status = ("Offline", False)
         threading.Thread(target=_check, daemon=True).start()
 
     def _apply_ai_status(self, status_text, is_online):
@@ -236,6 +236,11 @@ class AppWindow(ctk.CTk):
         self.refresh_nav_buttons()
 
     def update_gui_loop(self):
+        if hasattr(self, '_pending_ai_status') and self._pending_ai_status is not None:
+            status_text, is_online = self._pending_ai_status
+            self._pending_ai_status = None
+            self._apply_ai_status(status_text, is_online)
+
         recalculate_metrics()
         self.views['dashboard'].update_dashboard_data()
         
