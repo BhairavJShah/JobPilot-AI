@@ -153,6 +153,7 @@ def recalculate_metrics_unlocked():
     applied = 0
     skipped = 0
     suggested = 0
+    platforms = {"Indeed": 0, "Naukri": 0, "LinkedIn": 0}
     if os.path.exists(APPLIED_DB_PATH):
         try:
             with open(APPLIED_DB_PATH, mode='r', encoding='utf-8') as f:
@@ -160,6 +161,7 @@ def recalculate_metrics_unlocked():
                 next(reader, None) # Skip header
                 for row in reader:
                     if row and len(row) >= 5:
+                        platform = row[3] if len(row) > 3 else ""
                         status = row[4]
                         if status in ["Applied", "Manual Approval Apply"]:
                             applied += 1
@@ -167,11 +169,15 @@ def recalculate_metrics_unlocked():
                             skipped += 1
                         elif status == "Suggested":
                             suggested += 1
+                        # Count platform breakdown
+                        if platform in platforms:
+                            platforms[platform] += 1
         except Exception:
             pass
     state.METRICS["applied"] = applied
     state.METRICS["skipped"] = skipped
     state.METRICS["suggested"] = suggested
+    state.METRICS["platforms"] = platforms
     state.SUGGESTION_COUNT = suggested
 
 def recalculate_metrics():
